@@ -1,0 +1,52 @@
+# Pounce-Board
+
+Full-stack meta-framework for **pounce-ts** with file-based routing, middleware, and SSR.
+
+## Status
+
+⚠️ **Early Development** - Framework skeleton created, core implementation in progress.
+
+## Features (Planned)
+
+- 🗂️ **File-based Routing** - Filesystem-based routes with dynamic segments
+- 🔄 **SSR-First** - Server-side rendering with automatic hydration
+- 🎯 **Type-Safe API** - Full TypeScript inference for routes and API calls
+- 🔌 **Middleware System** - Composable, per-route middleware stacks
+- 🌐 **External API Proxies** - Type-safe integration with third-party APIs
+- ⚡ **Hono Integration** - Built on Hono for performance and flexibility
+
+## Quick Start
+
+```bash
+npm install pounce-board pounce-ts mutts
+```
+
+## Project Structure
+
+```
+routes/
+├── index.tsx              # Home page (/)
+├── index.ts               # Home API handlers
+├── common.tsx             # Root layout
+├── common.ts              # Root middleware
+└── users/
+    ├── [id]/
+    │   ├── index.tsx      # User page (/users/:id)
+    │   ├── index.ts       # User handlers
+    │   └── common.ts      # User middleware
+    └── types.d.ts         # Shared types
+```
+
+## Documentation
+
+See the `analysis/` directory for detailed documentation:
+
+- [README.md](./analysis/README.md) - Quick start guide
+- [CONCEPTS.md](./analysis/CONCEPTS.md) - Core concepts
+- [ARCHITECTURE.md](./analysis/ARCHITECTURE.md) - Full architecture
+- [API.md](./analysis/API.md) - API reference
+- [walkthrough.md](./walkthrough.md) - Complete walkthrough
+
+## License
+
+MIT

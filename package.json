@@ -1,0 +1,76 @@
+{
+	"name": "pounce-board",
+	"version": "0.1.0",
+	"description": "Full-stack meta-framework for pounce-ts with file-based routing, SSR, and middleware",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"types": "./dist/index.d.ts"
+		},
+		"./http": {
+			"import": "./dist/lib/http/index.js",
+			"types": "./dist/lib/http/index.d.ts"
+		},
+		"./ssr": {
+			"import": "./dist/lib/ssr/index.js",
+			"types": "./dist/lib/ssr/index.d.ts"
+		},
+		"./router": {
+			"import": "./dist/lib/router/index.js",
+			"types": "./dist/lib/router/index.d.ts"
+		}
+	},
+	"scripts": {
+		"dev": "tsc --watch",
+		"build": "tsc",
+		"test": "vitest",
+		"test:unit": "vitest --project unit",
+		"test:integration": "vitest --project integration",
+		"test:e2e": "playwright test",
+		"test:e2e:ui": "playwright test --ui",
+		"test:coverage": "vitest --coverage",
+		"test:all": "npm run test && npm run test:e2e",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write ."
+	},
+	"keywords": [
+		"pounce",
+		"framework",
+		"ssr",
+		"routing",
+		"middleware",
+		"full-stack"
+	],
+	"author": "",
+	"license": "MIT",
+	"peerDependencies": {},
+	"peerDependenciesMeta": {
+		"pounce-ts": {
+			"optional": true
+		},
+		"mutts": {
+			"optional": true
+		}
+	},
+	"dependencies": {
+		"hono": "^4.6.14",
+		"zod": "^3.24.1"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^1.9.4",
+		"@playwright/test": "^1.49.1",
+		"@types/node": "^22.10.5",
+		"@vitest/coverage-v8": "^2.1.8",
+		"typescript": "^5.7.2",
+		"vite": "^6.0.7",
+		"vitest": "^2.1.8"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	]
+}

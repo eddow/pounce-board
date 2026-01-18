@@ -1,78 +1,44 @@
-# Pounce-Board Cheatsheet
+# Pounce-Board LLM Cheatsheet
 
-## Dependencies
+## Core Philosophy
+- **Automated Integration**: Unlike bounce-ts which requires manual setup, pounce-board automatically wires routes, middleware, and Hono integration
+- **File-based Conventions**: Route structure determines behavior (`.ts` = backend, `.tsx` = frontend, `common.ts` = middleware)
+- **Type Safety First**: Shared `.d.ts` files between client/server are mandatory
+- **Universal API Client**: Single `api()` function works with absolute, site-absolute, and site-relative URLs
 
-> [!IMPORTANT]
-> Before working on pounce-board, read these LLM.md files:
-> - [pounce-ts/LLM.md](file:///home/fmdm/dev/ownk/pounce-ts/LLM.md) – UI framework with fine-grained reactivity
-> - [mutts/LLM.md](file:///home/fmdm/dev/ownk/mutts/LLM.md) – Reactivity system (used both FE and BE)
-> - [bounce-ts/LLM.md](file:///home/fmdm/dev/ownk/bounce-ts/LLM.md) – Existing Pounce implementation reference
+## Routing & File Conventions
+- **No `+page` prefix**: Use `index.tsx` for pages, `[name].tsx` for named pages
+- **Dynamic Segments**: `[id]` for single params, `[...slug]` for catch-all
+- **Route Groups**: `(auth)/login.tsx` → `/login` (parentheses not in URL)
+- **Middleware Inheritance**: `common.ts` middleware applies to all descendant routes automatically
 
-## Overview
-pounce-board is to pounce-ts what SvelteKit is to Svelte. A full-stack meta-framework providing:
-- File-based routing
-- Type-safe API client
-- SSR data injection
-- Explicit middleware stacks
-- External API proxies
+## Data Fetching & SSR
+- **Unified `api()` client**: Works on server and client
+  - **Server**: Direct handler dispatch (no network)
+  - **Client (first load)**: Reads from `<script id="pounce-data-{base64}">` tags
+  - **Client (navigation)**: Standard fetch
+- **SSR ID Generation**: Deterministic base64-encoded path for hydration keys
+- **Hydration**: Data injected via script tags, not global window object
 
-## Key Concepts
+## Hono Integration
+- **Fully Automated**: `createPounceMiddleware()` handles all route registration
+- **No Manual Wiring**: Unlike Express/Fastify, routes are discovered and mounted automatically
+- **File Scanning**: Uses `import.meta.glob` (Vite) or fs scanning (Node)
 
-### mutts (Backend + Frontend)
-The `mutts` library provides reactivity used on **both sides**:
-- `reactive(obj)` – Create reactive proxies
-- `effect(() => {...})` – Run side effects on dependency changes
-- `memoize(() => ...)` – Computed values
+## External API Proxies
+- **Type-Safe Proxies**: `defineProxy()` creates typed API clients
+- **Path Substitution**: `{param}` in paths replaced with runtime values
+- **Transform Pipeline**: `prepare()` → request → `transform()` → response
+- **Development Mocking**: `mock()` function returns fake data in dev mode
 
-### File Structure
+## Testing Strategy
+- **Colocated Unit Tests**: `.spec.ts` files next to source
+- **Integration Tests**: `tests/integration/` for multi-module scenarios
+- **E2E Tests**: `tests/e2e/` using Playwright
+- **Consumer Tests**: `tests/consumers/` for real-app validation
 
-> [!IMPORTANT]
-> **No `+` prefixes!** Extension determines role:
-> - `.tsx` = Frontend (components, layouts)
-> - `.ts` = Backend (handlers, middleware)
-
-```
-routes/
-├── common.tsx                # Root layout
-├── common.ts                 # Root middleware
-├── index.tsx                 # Page: /
-├── index.ts                  # Handlers: /
-├── users/
-│   ├── common.tsx            # Users layout
-│   ├── common.ts             # Users middleware
-│   ├── index.tsx             # Page: /users
-│   ├── index.ts              # Handlers: /users
-│   ├── [id]/
-│   │   ├── index.tsx         # Page: /users/123
-│   │   └── index.ts          # Handlers: /users/123
-│   └── types.d.ts            # Shared types
-├── (auth)/                   # Route group (not in URL!)
-│   ├── login.tsx             # Page: /login
-│   └── login.ts              # Handlers: /login
-└── dashboard/
-    ├── settings.tsx          # Page: /dashboard/settings
-    └── settings.ts           # Handlers: /dashboard/settings
-```
-
-### Middleware Inheritance
-Middleware in `common.ts` applies to **all children** automatically.
-
-### API Unity
-```ts
-api(".")              // Relative (same route)
-api("/users/123")     // Absolute
-api("~/api/legacy")   // External proxy
-```
-
-### SSR Hydration
-- **Server:** Injects data as `<script id="pounce-data-...">` tags
-- **Client (First Load):** Reads from script tags (zero-latency)
-- **Client (Navigation):** Standard fetch
-
-## Gotchas
-
-- pounce-ts props are **reactive proxies** – do NOT destructure outside effects
-- Use `<for each={items}>` not `items.map()`
-- Use `<div if={condition}>` not `{condition && <div>}`
-- Middleware is per-route, NOT global chain
-- It looks like react but it is definitively not!
+## Key Differences from Bounce-TS
+1. **Automated vs Manual**: Pounce-board auto-discovers routes, bounce-ts requires explicit registration
+2. **Framework vs Library**: Pounce-board is opinionated meta-framework, bounce-ts is flexible library  
+3. **SSR Built-in**: First-class SSR support vs bolt-on
+4. **Middleware System**: Per-route middleware inheritance vs global middleware
