@@ -80,7 +80,13 @@ export function injectSSRData(id: string, data: unknown) {
 }
 
 // Single API client for all use cases
-export function api(input: string | URL) {
+// Single API client for all use cases
+export function api(input: string | URL | object) {
+  // If input is a proxy object, return it directly
+  if (typeof input === "object" && input !== null && !(input instanceof URL)) {
+    return input as any;
+  }
+
   // Normalize input to URL
   let url: URL;
   
@@ -96,13 +102,11 @@ export function api(input: string | URL) {
        const base = typeof window !== "undefined" ? window.location.href : "http://localhost";
        url = new URL(input, base);
     } else {
-       // Fallback or external proxy key (e.g. "~/api/...")
-       // If it's a proxy key, the implementation would look up the proxy definition
-       // For this reference implementation, we assume URL-like strings
+       // Fallback for simple paths
        url = new URL(input, "http://localhost"); 
     }
   } else {
-    url = input;
+    url = input as URL;
   }
 
   const id = getSSRId(url);

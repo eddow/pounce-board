@@ -306,7 +306,7 @@ import { useMutation } from "@tanstack/react-query";
 export default function CheckoutPage() {
   const { mutate: createPayment, isPending } = useMutation({
     mutationFn: (paymentData) =>
-      api("~/api/payment").createPayment(paymentData)
+      api("/api/payment").createPayment(paymentData)
   });
 
   const handleSubmit = async (formData) => {

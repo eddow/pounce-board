@@ -6,6 +6,11 @@
 - **Type Safety First**: Shared `.d.ts` files between client/server are mandatory
 - **Universal API Client**: Single `api()` function works with absolute, site-absolute, and site-relative URLs
 
+## Status & Caveats (Updated 2026-01-19)
+- **Status**: Core routing, Hono integration, and SSR injection are implemented and tested.
+- **Caveat**: `walkthrough.md` may lag behind code. Verified tests are the source of truth.
+- **Drift**: Some test files referenced in plans might have different names (e.g., `route-scanner.spec.ts` vs `route-loading.spec.ts`).
+
 ## Routing & File Conventions
 - **No `+page` prefix**: Use `index.tsx` for pages, `[name].tsx` for named pages
 - **Dynamic Segments**: `[id]` for single params, `[...slug]` for catch-all
@@ -19,6 +24,7 @@
   - **Client (navigation)**: Standard fetch
 - **SSR ID Generation**: Deterministic base64-encoded path for hydration keys
 - **Hydration**: Data injected via script tags, not global window object
+- **Interceptors**: `config.interceptors.request/response` arrays. **Unique**: These run during SSR dispatch (not just `fetch`), so headers set by interceptors are visible to handlers.
 
 ## Hono Integration
 - **Fully Automated**: `createPounceMiddleware()` handles all route registration
@@ -33,7 +39,7 @@
 
 ## Testing Strategy
 - **Colocated Unit Tests**: `.spec.ts` files next to source
-- **Integration Tests**: `tests/integration/` for multi-module scenarios
+- **Integration Tests**: `tests/integration/` (e.g., `route-scanner.spec.ts`, `ssr-flow.spec.ts`)
 - **E2E Tests**: `tests/e2e/` using Playwright
 - **Consumer Tests**: `tests/consumers/` for real-app validation
 

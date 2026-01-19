@@ -1,0 +1,40 @@
+{
+	"extends": "../../../tsconfig.json",
+	"compilerOptions": {
+		"baseUrl": ".",
+		"paths": {
+			"pounce-board/*": [
+				"../../../src/lib/*"
+			],
+			"pounce-board/http/*": [
+				"../../../src/lib/http/*"
+			],
+			"pounce-board/adapters/*": [
+				"../../../src/adapters/*"
+			],
+			"pounce-ts": [
+				"./node_modules/pounce-ts/src/index.d.ts"
+			],
+			"pounce-ts/jsx-runtime": [
+				"./node_modules/pounce-ts/src/runtime/jsx-runtime.ts"
+			],
+			"pounce-ts/*": [
+				"./node_modules/pounce-ts/src/*"
+			]
+		},
+		"jsx": "react-jsx",
+		"jsxImportSource": "pounce-ts",
+		"rootDir": "../../..",
+		"noEmit": true,
+		"skipLibCheck": true
+	},
+	"include": [
+		"routes/**/*",
+		"server.ts",
+		"vite.config.ts",
+		"./node_modules/pounce-ts/src/index.d.ts"
+	],
+	"exclude": [
+		"dist"
+	]
+}

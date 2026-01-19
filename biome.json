@@ -1,27 +1,61 @@
 {
-	"$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-	"organizeImports": {
-		"enabled": true
-	},
-	"linter": {
-		"enabled": true,
-		"rules": {
-			"recommended": true,
-			"suspicious": {
-				"noExplicitAny": "off"
-			}
-		}
-	},
-	"formatter": {
-		"enabled": true,
-		"indentStyle": "space",
-		"indentWidth": 2,
-		"lineWidth": 100
+	"$schema": "https://biomejs.dev/schemas/2.0.6/schema.json",
+	"files": {
+		"includes": [
+			"src/**/*.ts",
+			"sandbox/**/*.ts",
+			"tests/**/*.ts",
+			"tests/**/*.tsx"
+		]
 	},
 	"javascript": {
 		"formatter": {
-			"quoteStyle": "double",
-			"semicolons": "always"
+			"lineWidth": 100,
+			"quoteStyle": "single",
+			"semicolons": "asNeeded",
+			"trailingCommas": "es5",
+			"indentStyle": "tab"
+		}
+	},
+	"linter": {
+		"rules": {
+			"style": {
+				"noNonNullAssertion": "off",
+				"useSingleVarDeclarator": {
+					"level": "warn",
+					"fix": "safe"
+				},
+				"useTemplate": {
+					"level": "warn",
+					"fix": "safe"
+				},
+				"noParameterAssign": "off",
+				"useImportType": "off"
+			},
+			"suspicious": {
+				"noExplicitAny": "off",
+				"noDebugger": "warn",
+				"noConsole": "info"
+			},
+			"performance": {
+				"noAccumulatingSpread": "off"
+			},
+			"complexity": {
+				"noBannedTypes": "off"
+			},
+			"security": {},
+			"correctness": {
+				"noUnsafeFinally": "off",
+				"noUnusedImports": {
+					"level": "info",
+					"fix": "safe"
+				},
+				"noUnusedFunctionParameters": {
+					"level": "info",
+					"fix": "safe"
+				}
+			},
+			"nursery": {}
 		}
 	}
 }

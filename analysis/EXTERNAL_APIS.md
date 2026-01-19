@@ -1,5 +1,9 @@
 # External API Integration
 
+> [!IMPORTANT]
+> **Proxies are code utilities, NOT HTTP routes.**  
+> Use `defineProxy()` to create typed wrappers for external APIs that your backend/frontend code imports and uses. They are not exposed as HTTP endpoints or forwarders.
+
 ## 1. Defining Proxies
 Create typed proxies for external APIs in `routes/api/`:
 
@@ -7,7 +11,7 @@ Create typed proxies for external APIs in `routes/api/`:
 // routes/api/legacy.ts
 import { defineProxy } from "pounce/http";
 
-export default defineProxy({
+export const proxy = defineProxy({
   baseUrl: "https://legacy-api.example.com",
 
   // Global request transforms
@@ -58,35 +62,39 @@ export default defineProxy({
 });
 ```
 
-## 2. Using Proxies
+## 2. Using Proxies in Your Code
+
+Proxies are **imported and called in your code**, not accessed via HTTP:
+
 ```ts
-// In your route handlers or frontend
-import { api } from "pounce/http/client";
+// In a route handler
+import { legacyApi } from "../../lib/proxies/legacy.js";
 
-// Get a user
-// Note: Proxies are just mapped to URLs. The api() client handles them if the path matches the proxy URL.
-// Or if we registered a global alias like "~/api/legacy" -> "https://legacy-api.example.com"
-const user = await api("~/api/legacy/users/123").get<User>();
-
-// Create a user
-const newUser = await api("~/api/legacy/users").post<User>({
-  name: "John Doe",
-  email: "john@example.com"
-});
-
-// Search users
-const results = await api("~/api/legacy/users/search").get<User[]>({
-  query: "John",
-  page: "2"
-});
+export async function get({ params }) {
+  // Call external API through proxy
+  const user = await fetch(legacyApi.baseUrl + legacyApi.endpoints.getUser.path, {
+    // ... apply transforms from proxy config
+  });
+  return { status: 200, data: user };
+}
 ```
+
+```ts
+// In a frontend component
+import { legacyApi } from "../lib/proxies/legacy.js";
+
+const user = await fetch(/* use legacyApi config */);  
+```
+
+> [!NOTE]
+> You implement the fetch logic yourself using the proxy configuration as a typed schema for endpoints, transforms, and auth.
 
 ## 3. Type Safety
 The proxy automatically generates TypeScript types:
 
 ```ts
 // All these are fully typed
-const user = await api("~/api/legacy/users/123").get<User>();
+const user = await api("/api/legacy/users/123").get<User>();
 // user: {
 //   id: string;...
 //   name: string;
@@ -155,7 +163,7 @@ endpoints: {
 // routes/api/legacy.ts
 import { defineProxy } from "pounce/http";
 
-export default defineProxy({
+export const proxy = defineProxy({
   baseUrl: process.env.NODE_ENV === "development"
     ? "/mock-legacy-api"
     : "https://legacy-api.example.com",
@@ -179,7 +187,7 @@ export default defineProxy({
 // routes/api/secure.ts
 import { defineProxy } from "pounce/http";
 
-export default defineProxy({
+export const proxy = defineProxy({
   baseUrl: "https://secure-api.example.com",
 
   // Global auth

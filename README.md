@@ -39,12 +39,12 @@ routes/
 
 ## Documentation
 
-See the `analysis/` directory for detailed documentation:
+See the `docs/` directory for detailed documentation:
 
-- [README.md](./analysis/README.md) - Quick start guide
-- [CONCEPTS.md](./analysis/CONCEPTS.md) - Core concepts
-- [ARCHITECTURE.md](./analysis/ARCHITECTURE.md) - Full architecture
-- [API.md](./analysis/API.md) - API reference
+- [Architecture](./docs/ARCHITECTURE.md) - Clean architecture overview
+- [Routing](./docs/ROUTING.md) - File-based routing guide
+- [SSR & Hydration](./docs/SSR.md) - Server-side rendering details
+- [External APIs](./docs/EXTERNAL_APIS.md) - Type-safe proxy guide
 - [walkthrough.md](./walkthrough.md) - Complete walkthrough
 
 ## License

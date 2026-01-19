@@ -2,38 +2,38 @@
  * Main entry point for pounce-board
  */
 
-// Export HTTP utilities
-export { runMiddlewares, createJsonResponse, createErrorResponse } from "./lib/http/core.js";
-export type {
-  HttpMethod,
-  RequestContext,
-  Middleware,
-  RouteHandler,
-  RouteResponse,
-} from "./lib/http/core.js";
-
+// Export adapters
+export { createPounceApp, createPounceMiddleware } from './adapters/hono.js'
 // Export API client
 export {
-  api,
-  enableSSR,
-  disableSSR,
-  getSSRId,
-  getSSRData,
-  injectSSRData,
-  clearSSRData,
-} from "./lib/http/client.js";
-
+	api,
+	clearSSRData,
+	config,
+	disableSSR,
+	enableSSR,
+	getSSRData,
+	getSSRId,
+	injectSSRData,
+	intercept,
+	type InterceptorMiddleware,
+} from './lib/http/client.js'
+export { PounceResponse } from './lib/http/response.js'
+export type {
+	HttpMethod,
+	Middleware,
+	RequestContext,
+	RouteHandler,
+	RouteResponse,
+} from './lib/http/core.js'
+// Export HTTP utilities
+export { createErrorResponse, createJsonResponse, runMiddlewares } from './lib/http/core.js'
+export type { ProxyConfig, ProxyEndpointConfig } from './lib/http/proxy.js'
 // Export proxy system
-export { defineProxy } from "./lib/http/proxy.js";
-export type { ProxyConfig, ProxyEndpointConfig } from "./lib/http/proxy.js";
-
-// Export SSR utilities
-export { injectApiResponses, escapeJson } from "./lib/ssr/utils.js";
-export type { SSRDataMap } from "./lib/ssr/utils.js";
+export { defineProxy } from './lib/http/proxy.js'
+export type { RouteMatch, RouteParams, RouteTreeNode } from './lib/router/index.js'
 
 // Export router
-export { parseSegment, matchRoute, buildRouteTree, collectMiddleware } from "./lib/router/index.js";
-export type { RouteParams, RouteMatch, RouteTreeNode } from "./lib/router/index.js";
-
-// Export adapters
-export { createPounceMiddleware, createPounceApp } from "./adapters/hono.js";
+export { buildRouteTree, collectMiddleware, matchRoute, parseSegment } from './lib/router/index.js'
+export type { SSRDataMap } from './lib/ssr/utils.js'
+// Export SSR utilities
+export { escapeJson, injectApiResponses } from './lib/ssr/utils.js'

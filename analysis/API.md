@@ -1,18 +1,25 @@
 # API Reference
 
 ## 1. HTTP Client
-### `api(path: string)`
-Creates an API client for a specific path.
+### `api(input: string | URL | object)`
+Creates an API client for a specific path or proxy object.
 
 **Parameters:**
-- `path`: Relative (`.`) or absolute (`/users`) path
+- `input`: URL string with these prefixes:
+  - `.` or `..` = Relative to current page
+  - `/` = Site-absolute path
+  - `http://` or `https://` = Full external URL
 
 **Returns:**
-An object with HTTP methods (`get`, `post`, etc.)
+An object with HTTP methods: `get`, `post`, `put`, `del`, `patch`
 
-**Example:**
+**Examples:**
 ```ts
-const user = await api("./users/[id]").get({ id: "123" });
+// URL string patterns
+await api("./users").get();                    // Relative to current route
+await api("/api/users/123").get();             // Absolute from site root
+await api("/api/users").get();                 // Absolute from site root
+await api("https://external.com/api").get();   // External URL
 ```
 
 ### Method Signatures
@@ -27,6 +34,9 @@ Makes a PUT request.
 
 #### `del<T>(params?: Record<string, string>): Promise<T>`
 Makes a DELETE request.
+
+#### `patch<T>(body: unknown): Promise<T>`
+Makes a PATCH request.
 
 ## 2. SSR Utilities
 ### `getSSRData<T>(id: string): T | null`
@@ -75,31 +85,3 @@ export async function get({ params, context }: {
 }
 ```
 
-## 5. External API Proxies
-### `defineProxy(config: ProxyConfig)`
-Creates a typed proxy for external APIs.
-
-**Example:**
-```ts
-// routes/api/legacy.ts
-import { defineProxy } from "pounce/http";
-
-export default defineProxy({
-  baseUrl: "https://legacy-api.example.com",
-  endpoints: {
-    getUser: {
-      method: "GET",
-      path: "/users/{id}",
-      transform: (data) => ({
-        ...data,
-        legacyId: data.id
-      })
-    }
-  }
-});
-```
-
-**Usage:**
-```ts
-const user = await api("~/api/legacy").getUser({ id: "123" });
-```

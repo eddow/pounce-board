@@ -63,7 +63,8 @@ export default function UserPage({ params }) {
   const initialData = getSSRData<User>(`user-${params.id}`);
   const { data: user } = useQuery(
 	["user", params.id],
-	() => api("./users/[id]").get({ id: params.id }),
+	// Use /api/... for SSR-safe calls to your server
+	() => api("/api/users").get({ id: params.id }),
 	{ initialData }
   );
 

@@ -1,0 +1,22 @@
+{
+	"name": "minimal-app",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"scripts": {
+		"dev": "tsx server.ts",
+		"build": "vite build",
+		"preview": "vite preview"
+	},
+	"dependencies": {
+		"pounce-board": "file:../../..",
+		"pounce-ts": "file:../../../../pounce-ts",
+		"mutts": "file:../../../../mutts",
+		"hono": "latest",
+		"@hono/node-server": "latest"
+	},
+	"devDependencies": {
+		"tsx": "latest",
+		"vite": "latest"
+	}
+}
