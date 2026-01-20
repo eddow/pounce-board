@@ -1,5 +1,6 @@
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { parsePathSegment, type ParsedPathSegment, type RouteParams } from 'pounce-ts'
 import type { Middleware, RouteHandler } from '../http/core.js'
 
 /**
@@ -13,61 +14,95 @@ function toFileUrl(filePath: string): string {
 }
 
 // Re-export for convenience
-export type { Middleware, RouteHandler }
+export type { Middleware, RouteHandler, RouteParams, ParsedPathSegment }
 
-export type RouteParams = Record<string, string>
-
+/**
+ * Result of a successful route match.
+ */
 export type RouteMatch = {
-	handler: RouteHandler
+	/** Backend route handler functions (GET, POST, etc.) */
+	handler?: RouteHandler
+	/** Frontend page component (from index.tsx or named.tsx) */
+	component?: any
+	/** Collected middleware stack from root to leaf */
 	middlewareStack: Middleware[]
+	/** Collected layout components from root to leaf (common.tsx) */
+	layouts?: any[]
+	/** Extracted path parameters (e.g., { id: "123" }) */
 	params: RouteParams
+	/** The normalized matched path */
 	path: string
 }
 
+/**
+ * Node in the route tree structure representing a path segment.
+ */
 export type RouteTreeNode = {
+	/** The URL segment this node matches (e.g., "users" or "") */
 	segment: string
+	/** True if this is a dynamic segment (e.g., [id]) */
 	isDynamic: boolean
+	/** True if this is a catch-all segment (e.g., [...slug]) */
 	isCatchAll: boolean
+	/** The name of the parameter for dynamic/catch-all segments */
 	paramName?: string
+	/** Child nodes mapped by their segment name */
 	children: Map<string, RouteTreeNode>
+	/** Route handlers loaded from index.ts or named.ts */
 	handlers?: Record<string, RouteHandler>
+	/** Page component loaded from index.tsx or named.tsx */
+	component?: any
+	/** Middleware loaded from common.ts */
 	middleware?: Middleware[]
+	/** Layout component loaded from common.tsx */
+	layout?: any
+	/** True if this is a route group (folder in parentheses) */
 	isRouteGroup?: boolean
 }
 
 /**
- * Parse dynamic segment from path segment
- * [id] -> { isDynamic: true, paramName: 'id' }
- * [...slug] -> { isCatchAll: true, paramName: 'slug' }
+ * Segment info derived from pounce-ts parsePathSegment.
+ * Adapts ParsedPathSegment to the format used by buildRouteTree.
  */
-export function parseSegment(segment: string): {
+export interface SegmentInfo {
 	isDynamic: boolean
 	isCatchAll: boolean
 	paramName?: string
 	normalizedSegment: string
-} {
-	if (segment.startsWith('[...') && segment.endsWith(']')) {
-		return {
-			isDynamic: true,
-			isCatchAll: true,
-			paramName: segment.slice(4, -1),
-			normalizedSegment: segment,
-		}
-	}
+}
 
-	if (segment.startsWith('[') && segment.endsWith(']')) {
-		return {
-			isDynamic: true,
-			isCatchAll: false,
-			paramName: segment.slice(1, -1),
-			normalizedSegment: segment,
-		}
-	}
+/**
+ * Parse dynamic segment from path segment using pounce-ts core.
+ * Adapts the ParsedPathSegment to SegmentInfo format for tree building.
+ *
+ * [id] -> { isDynamic: true, paramName: 'id' }
+ * [...slug] -> { isCatchAll: true, paramName: 'slug' }
+ */
+export function parseSegment(segment: string): SegmentInfo {
+	const parsed = parsePathSegment(segment)
 
-	return {
-		isDynamic: false,
-		isCatchAll: false,
-		normalizedSegment: segment,
+	switch (parsed.kind) {
+		case 'catchAll':
+			return {
+				isDynamic: true,
+				isCatchAll: true,
+				paramName: parsed.name,
+				normalizedSegment: segment,
+			}
+		case 'param':
+			return {
+				isDynamic: true,
+				isCatchAll: false,
+				paramName: parsed.name,
+				normalizedSegment: segment,
+			}
+		case 'literal':
+		default:
+			return {
+				isDynamic: false,
+				isCatchAll: false,
+				normalizedSegment: segment,
+			}
 	}
 }
 
@@ -78,47 +113,54 @@ export function parseSegment(segment: string): {
  * Priority: static routes > dynamic routes > catch-all routes > route groups
  */
 export function matchRoute(
-	path: string,
+	urlPath: string,
 	routeTree: RouteTreeNode,
 	method = 'GET'
 ): RouteMatch | null {
 	// Normalize path: remove trailing slash (except for root)
-	const normalizedPath = path === '/' ? '/' : path.replace(/\/$/, '')
+	const normalizedPath = urlPath === '/' ? '/' : urlPath.replace(/\/$/, '')
 	const segments = normalizedPath.split('/').filter((s) => s !== '')
 
 	/**
 	 * Recursive tree traversal with priority handling
 	 */
+	/**
+	 * Recursive tree traversal with priority handling
+	 */
 	function traverse(
 		node: RouteTreeNode,
-		segmentIndex: number
-	): { node: RouteTreeNode; params: RouteParams; middlewareStack: Middleware[] } | null {
-		// Base case: If we've consumed all segments, check for handler at this node
+		segmentIndex: number,
+		depth = 0
+	): { node: RouteTreeNode; params: RouteParams; middlewareStack: Middleware[]; layouts: any[] } | null {
+		if (depth > 50) {
+			console.warn('[pounce-board] Route matching depth exceeded')
+			return null
+		}
+		// Base case: If we've consumed all segments, check for handler OR component at this node
 		if (segmentIndex >= segments.length) {
-			// If this node is a route group, we might need to continue traversing ??
-			// No, if we are at end of segments, we check if THIS node has a handler.
-			// Handlers can exist on route group nodes (e.g. (auth)/index.ts -> /)
-			if (node.handlers?.[method]) {
+			if (node.handlers?.[method] || node.component) {
 				return {
 					node,
 					params: {},
 					middlewareStack: node.middleware ? [...node.middleware] : [],
+					layouts: node.layout ? [node.layout] : [],
 				}
 			}
-			// If not found here, maybe a child catch-all matches empty? (Rare, usually catch-all needs 1 segment)
-			// Or maybe we are at root / and need to check children route groups?
-			// Example: / matches (auth)/index.ts
-			// We effectively have 0 segments left.
 		}
 
 		const currentSegment = segments[segmentIndex]
 
-		// Helper to prepend this node's middleware to result
-		const withMiddleware = (
-			result: { node: RouteTreeNode; params: RouteParams; middlewareStack: Middleware[] } | null
+		// Helper to prepend this node's middleware and layout to result
+		const withStack = (
+			result: { node: RouteTreeNode; params: RouteParams; middlewareStack: Middleware[]; layouts: any[] } | null
 		) => {
-			if (result && node.middleware) {
+			if (!result) return null
+			
+			if (node.middleware) {
 				result.middlewareStack.unshift(...node.middleware)
+			}
+			if (node.layout) {
+				result.layouts.unshift(node.layout)
 			}
 			return result
 		}
@@ -127,8 +169,8 @@ export function matchRoute(
 		if (segmentIndex < segments.length) {
 			const staticChild = node.children.get(currentSegment)
 			if (staticChild && !staticChild.isDynamic && !staticChild.isRouteGroup) {
-				const result = traverse(staticChild, segmentIndex + 1)
-				if (result) return withMiddleware(result)
+				const result = traverse(staticChild, segmentIndex + 1, depth + 1)
+				if (result) return withStack(result)
 			}
 		}
 
@@ -136,41 +178,36 @@ export function matchRoute(
 		if (segmentIndex < segments.length) {
 			for (const [_, child] of node.children) {
 				if (child.isDynamic && !child.isCatchAll && !child.isRouteGroup) {
-					const result = traverse(child, segmentIndex + 1)
+					const result = traverse(child, segmentIndex + 1, depth + 1)
 					if (result) {
 						if (child.paramName) {
 							result.params[child.paramName] = currentSegment
 						}
-						return withMiddleware(result)
+						return withStack(result)
 					}
 				}
 			}
 		}
 
-		// Priority 3: Try route groups (transparent) - attempt to match REST of path inside group
-		// This happens BEFORE catch-all because route group might contain specific static matches
-		// Note: We do NOT advance segmentIndex
+		// Priority 3: Try route groups (transparent)
 		for (const [_, child] of node.children) {
 			if (child.isRouteGroup) {
-				const result = traverse(child, segmentIndex)
-				if (result) return withMiddleware(result)
+				const result = traverse(child, segmentIndex, depth + 1)
+				if (result) return withStack(result)
 			}
 		}
 
 		// Priority 4: Try catch-all segment [...slug]
-		// Catch-all typically consumes at least one segment, unless we allow optional catch-all [[...slug]]
-		// Assuming strict [...slug] for now requiring >= 1 segment
 		if (segmentIndex < segments.length) {
 			for (const [_, child] of node.children) {
 				if (child.isCatchAll && child.paramName) {
-					// Capture all remaining segments
 					const remaining = segments.slice(segmentIndex).join('/')
-					// Ensure we have a handler there
-					if (child.handlers?.[method]) {
-						return withMiddleware({
+					if (child.handlers?.[method] || child.component) {
+						return withStack({
 							node: child,
 							params: { [child.paramName]: remaining },
 							middlewareStack: child.middleware ? [...child.middleware] : [],
+							layouts: child.layout ? [child.layout] : [],
 						})
 					}
 				}
@@ -180,20 +217,32 @@ export function matchRoute(
 		return null
 	}
 
+
 	const result = traverse(routeTree, 0)
 	if (!result) return null
 
 	return {
-		handler: result.node.handlers![method]!,
+		handler: result.node.handlers?.[method],
+		component: result.node.component,
 		middlewareStack: result.middlewareStack,
+		layouts: result.layouts,
 		params: result.params,
 		path: normalizedPath,
 	}
 }
 
 /**
- * Scan routes directory and build route tree
- * This uses node:fs and is intended for server-side usage
+ * Scan routes directory and build route tree.
+ * 
+ * Discovers:
+ * - `index.ts` -> Backend handlers
+ * - `index.tsx` -> Frontend page components
+ * - `common.ts` -> Middleware (inherited by children)
+ * - `common.tsx` -> Layouts (inherited, wraps children)
+ * - `named.ts` -> Route handlers (e.g. `users.ts` -> `/users`)
+ * - `named.tsx` -> Page components (e.g. `list.tsx` -> `/list`)
+ * 
+ * This uses node:fs and is intended for server-side usage.
  */
 export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> {
 	const root: RouteTreeNode = {
@@ -204,6 +253,12 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 	}
 
 	async function scan(dir: string, node: RouteTreeNode) {
+
+		if (path.relative(routesDir, dir).split(path.sep).length > 20) {
+			console.warn(`[pounce-board] Route recursion depth exceeded at ${dir}`)
+			return
+		}
+
 		let entries
 		try {
 			entries = await fs.readdir(dir, { withFileTypes: true })
@@ -224,6 +279,15 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 					} catch (e) {
 						console.error(`Failed to load middleware from ${entryPath}`, e)
 					}
+				} else if (entry.name === 'common.tsx') {
+					try {
+						const mod = await import(toFileUrl(entryPath))
+						if (mod.default) {
+							node.layout = mod.default
+						}
+					} catch (e) {
+						console.error(`Failed to load layout from ${entryPath}`, e)
+					}
 				} else if (entry.name === 'index.ts') {
 					try {
 						const mod = await import(toFileUrl(entryPath))
@@ -242,37 +306,56 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 					} catch (e) {
 						console.error(`Failed to load handlers from ${entryPath}`, e)
 					}
-
-				} else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
-					// Named route file (e.g. users.ts -> /users)
+				} else if (entry.name === 'index.tsx') {
+					try {
+						const mod = await import(toFileUrl(entryPath))
+						if (mod.default) {
+							node.component = mod.default
+						}
+					} catch (e) {
+						console.error(`Failed to load component from ${entryPath}`, e)
+					}
+				} else if ((entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) || entry.name.endsWith('.tsx')) {
+					// Named route file (e.g. users.ts -> /users or users.tsx)
 					const fileName = path.parse(entry.name).name
 					const segmentInfo = parseSegment(fileName)
+					const segment = segmentInfo.normalizedSegment
 
-					// Create a child node for this file
-					const childNode: RouteTreeNode = {
-						segment: segmentInfo.normalizedSegment,
-						isDynamic: segmentInfo.isDynamic,
-						isCatchAll: segmentInfo.isCatchAll,
-						paramName: segmentInfo.paramName,
-						children: new Map(),
+					// Check if child node already exists (e.g. created by matching .ts file)
+					let childNode = node.children.get(segment)
+					if (!childNode) {
+						childNode = {
+							segment: segment,
+							isDynamic: segmentInfo.isDynamic,
+							isCatchAll: segmentInfo.isCatchAll,
+							paramName: segmentInfo.paramName,
+							children: new Map(),
+						}
+						node.children.set(segment, childNode)
 					}
 
 					try {
 						const mod = await import(toFileUrl(entryPath))
-						const handlers: Record<string, RouteHandler> = {}
-						const methods = ['get', 'post', 'put', 'del', 'patch', 'delete']
-						for (const method of methods) {
-							const exportName = method
-							if (typeof mod[exportName] === 'function') {
-								const upperMethod =
-									method === 'del' || method === 'delete' ? 'DELETE' : method.toUpperCase()
-								handlers[upperMethod] = mod[exportName]
+						
+						if (entry.name.endsWith('.ts')) {
+							const handlers: Record<string, RouteHandler> = {}
+							const methods = ['get', 'post', 'put', 'del', 'patch', 'delete']
+							for (const method of methods) {
+								const exportName = method
+								if (typeof mod[exportName] === 'function') {
+									const upperMethod =
+										method === 'del' || method === 'delete' ? 'DELETE' : method.toUpperCase()
+									handlers[upperMethod] = mod[exportName]
+								}
+							}
+							childNode.handlers = handlers
+						} else if (entry.name.endsWith('.tsx')) {
+							if (mod.default) {
+								childNode.component = mod.default
 							}
 						}
-						childNode.handlers = handlers
-						node.children.set(segmentInfo.normalizedSegment, childNode)
 					} catch (e) {
-						console.error(`Failed to load handlers from ${entryPath}`, e)
+						console.error(`Failed to load handlers/component from ${entryPath}`, e)
 					}
 				}
 			} else if (entry.isDirectory()) {

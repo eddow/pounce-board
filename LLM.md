@@ -6,10 +6,17 @@
 - **Type Safety First**: Shared `.d.ts` files between client/server are mandatory
 - **Universal API Client**: Single `api()` function works with absolute, site-absolute, and site-relative URLs
 
-## Status & Caveats (Updated 2026-01-19)
-- **Status**: Core routing, Hono integration, and SSR injection are implemented and tested.
+## Status & Caveats (Updated 2026-01-20)
+- **Status**: Core routing, Hono integration, and SSR injection are implemented and tested. Package exports refactored to support conditional loading.
 - **Caveat**: `walkthrough.md` may lag behind code. Verified tests are the source of truth.
 - **Drift**: Some test files referenced in plans might have different names (e.g., `route-scanner.spec.ts` vs `route-loading.spec.ts`).
+
+## Package Entry Points
+- **Universal**: `import { ... } from 'pounce-board'` - Types, API client (adapts to env), universal utilities.
+- **Server-Only**: `import { ... } from 'pounce-board/server'` - Router, Hono adapters, middleware runner.
+- **Client-Only**: `import { ... } from 'pounce-board/client'` - Hydration utilities, client-side specifics.
+- **Automatic Resolution**: `pounce-board` automatically resolves to client or server build based on specific environment (browser vs node) via `package.json` exports.
+
 
 ## Routing & File Conventions
 - **No `+page` prefix**: Use `index.tsx` for pages, `[name].tsx` for named pages
@@ -42,6 +49,8 @@
 - **Integration Tests**: `tests/integration/` (e.g., `route-scanner.spec.ts`, `ssr-flow.spec.ts`)
 - **E2E Tests**: `tests/e2e/` using Playwright
 - **Consumer Tests**: `tests/consumers/` for real-app validation
+- **Tests as Documentation**: Reliable source of truth. If docs and tests disagree, trust the tests.
+  - Search in files for <<< @vocab "Test as Documentation" >>> to find tests that verify specific behaviors.
 
 ## Key Differences from Bounce-TS
 1. **Automated vs Manual**: Pounce-board auto-discovers routes, bounce-ts requires explicit registration

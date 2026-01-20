@@ -4,8 +4,11 @@ test.describe('Minimal App Consumer', () => {
 	test.use({ baseURL: 'http://localhost:3000' })
 
 	test('User profile shows middleware context and SSR data', async ({ page }) => {
+		page.on('console', (msg) => console.log(`[Browser Console] ${msg.type()}: ${msg.text()}`))
+		page.on('pageerror', (err) => console.log(`[Browser Error] ${err.message}`))
+
 		// Go to user 123
-		await page.goto('/users/123')
+		const response = await page.goto('/users/123')
 
 		// Wait for the profile box
 		const profile = page.locator('#user-profile')
@@ -20,9 +23,10 @@ test.describe('Minimal App Consumer', () => {
 		// Check timestamp (from middleware)
 		await expect(page.locator('#timestamp')).toContainText('Time:')
         
-        // Check if SSR data script is present (technical verification of hydration source)
-        const script = await page.locator('script[id^="pounce-data-"]').count()
-        expect(script).toBeGreaterThan(0)
+             // Check if SSR data script is present (technical verification of hydration source)
+             // We check the response text because hydration removes the script tag
+             const html = await response?.text() || ''
+             expect(html).toContain('pounce-data-')
 	})
 
     test('API directly returns context data', async ({ request }) => {

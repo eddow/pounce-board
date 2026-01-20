@@ -1,4 +1,4 @@
-import { type RequestContext } from 'pounce-board/http/core.js'
+import { type RequestContext } from 'pounce-board/server'
 
 export async function get(_ctx: RequestContext) {
 	return {

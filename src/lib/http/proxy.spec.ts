@@ -15,7 +15,7 @@ describe('defineProxy', () => {
 			const proxy = defineProxy({
 				baseUrl: 'https://api.example.com',
 				endpoints: {
-					getUser: { method: 'GET', path: '/users/{id}' },
+					getUser: { method: 'GET', path: '/users/[id]' },
 					createUser: { method: 'POST', path: '/users' },
 				},
 			})
@@ -28,7 +28,7 @@ describe('defineProxy', () => {
 			const proxy = defineProxy({
 				baseUrl: 'https://api.example.com',
 				endpoints: {
-					getUser: { method: 'GET', path: '/users/{id}' },
+					getUser: { method: 'GET', path: '/users/[id]' },
 				},
 			})
 
@@ -45,7 +45,7 @@ describe('defineProxy', () => {
 			const proxy = defineProxy({
 				baseUrl: 'https://api.example.com',
 				endpoints: {
-					getUser: { method: 'GET', path: '/users/{id}' },
+					getUser: { method: 'GET', path: '/users/[id]' },
 				},
 			})
 
@@ -94,7 +94,7 @@ describe('defineProxy', () => {
 			const proxy = defineProxy({
 				baseUrl: 'https://api.example.com',
 				endpoints: {
-					getUser: { method: 'GET', path: '/users/{id}' },
+					getUser: { method: 'GET', path: '/users/[id]' },
 				},
 			})
 
@@ -116,7 +116,7 @@ describe('defineProxy', () => {
 			const proxy = defineProxy({
 				baseUrl: 'https://api.example.com',
 				endpoints: {
-					getUserPost: { method: 'GET', path: '/users/{userId}/posts/{postId}' },
+					getUserPost: { method: 'GET', path: '/users/[userId]/posts/[postId]' },
 				},
 			})
 
@@ -138,7 +138,7 @@ describe('defineProxy', () => {
 			const proxy = defineProxy({
 				baseUrl: 'https://api.example.com',
 				endpoints: {
-					getUser: { method: 'GET', path: '/users/{id}' },
+					getUser: { method: 'GET', path: '/users/[id]' },
 				},
 			})
 
@@ -205,7 +205,7 @@ describe('defineProxy', () => {
 				endpoints: {
 					getUser: {
 						method: 'GET',
-						path: '/users/{id}',
+						path: '/users/[id]',
 						transform: (data: any) => ({
 							id: data.userId,
 							name: data.fullName,
@@ -241,7 +241,7 @@ describe('defineProxy', () => {
 				endpoints: {
 					getUser: {
 						method: 'GET',
-						path: '/users/{id}',
+						path: '/users/[id]',
 						transform: transformFn,
 					},
 				},
@@ -299,7 +299,7 @@ describe('defineProxy', () => {
 				endpoints: {
 					getUser: {
 						method: 'GET',
-						path: '/users/{id}',
+						path: '/users/[id]',
 						onError: (_error: any) => {
 							throw new Error(`Custom error: User not found`)
 						},
@@ -321,7 +321,7 @@ describe('defineProxy', () => {
 			const proxy = defineProxy({
 				baseUrl: 'https://api.example.com',
 				endpoints: {
-					getUser: { method: 'GET', path: '/users/{id}' },
+					getUser: { method: 'GET', path: '/users/[id]' },
 				},
 			})
 
@@ -347,7 +347,7 @@ describe('defineProxy', () => {
 				endpoints: {
 					getUser: {
 						method: 'GET',
-						path: '/users/{id}',
+						path: '/users/[id]',
 						schema: mockSchema as any,
 					},
 				},
@@ -376,7 +376,7 @@ describe('defineProxy', () => {
 				endpoints: {
 					getUser: {
 						method: 'GET',
-						path: '/users/{id}',
+						path: '/users/[id]',
 						schema: mockSchema as any,
 					},
 				},
@@ -401,7 +401,7 @@ describe('defineProxy', () => {
 				endpoints: {
 					downloadFile: {
 						method: 'GET',
-						path: '/files/{id}',
+						path: '/files/[id]',
 						raw: true,
 					},
 				},
@@ -427,7 +427,7 @@ describe('defineProxy', () => {
 					endpoints: {
 						getUser: {
 							method: 'GET',
-							path: '/users/{id}',
+							path: '/users/[id]',
 							mock: (params) => ({
 								id: params.id,
 								name: `Mock User ${params.id}`,
@@ -461,7 +461,7 @@ describe('defineProxy', () => {
 					endpoints: {
 						getUser: {
 							method: 'GET',
-							path: '/users/{id}',
+							path: '/users/[id]',
 							mock: (params) => ({ id: params.id, name: 'Mock User' }),
 						},
 					},
@@ -494,7 +494,7 @@ describe('defineProxy', () => {
 					},
 				},
 				endpoints: {
-					getUser: { method: 'GET', path: '/users/{id}' },
+					getUser: { method: 'GET', path: '/users/[id]' },
 				},
 			})
 
@@ -528,7 +528,7 @@ describe('defineProxy', () => {
 					},
 				}),
 				endpoints: {
-					getUser: { method: 'GET', path: '/users/{id}' },
+					getUser: { method: 'GET', path: '/users/[id]' },
 				},
 			})
 
@@ -556,13 +556,239 @@ describe('defineProxy', () => {
 			const proxy = defineProxy({
 				baseUrl: 'https://api.example.com',
 				endpoints: {
-					action: { method, path: '/resource/{id}' },
+					action: { method, path: '/resource/[id]' },
 				},
 			})
 
 			await proxy.action({ id: '123' })
 
 			expect(mockFetch).toHaveBeenCalledWith(expect.any(URL), expect.objectContaining({ method }))
+		})
+	})
+	
+	describe('retry logic', () => {
+		it('should retry on non-ok response', async () => {
+			const mockFetch = vi.fn()
+				.mockResolvedValueOnce({ ok: false, status: 503, statusText: 'Service Unavailable' })
+				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) })
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				retries: 1,
+				retryDelay: 0,
+				endpoints: {
+					action: { method: 'GET', path: '/test' },
+				},
+			})
+
+			const result = await proxy.action()
+			expect(result).toEqual({ success: true })
+			expect(mockFetch).toHaveBeenCalledTimes(2)
+		})
+
+		it('should retry on fetch error', async () => {
+			const mockFetch = vi.fn()
+				.mockRejectedValueOnce(new Error('Network error'))
+				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) })
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				retries: 2,
+				retryDelay: 0,
+				endpoints: {
+					action: { method: 'GET', path: '/test' },
+				},
+			})
+
+			const result = await proxy.action()
+			expect(result).toEqual({ success: true })
+			expect(mockFetch).toHaveBeenCalledTimes(2)
+		})
+
+		it('should fail after all retries exhausted', async () => {
+			const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Error' })
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				retries: 2,
+				retryDelay: 0,
+				endpoints: {
+					action: { method: 'GET', path: '/test' },
+				},
+			})
+
+			await expect(proxy.action()).rejects.toThrow('HTTP 500: Internal Error')
+			expect(mockFetch).toHaveBeenCalledTimes(3) // Initial + 2 retries
+		})
+
+		it('should respect endpoint-specific retries over proxy retries', async () => {
+			const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Internal Error' })
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				retries: 5,
+				retryDelay: 0,
+				endpoints: {
+					action: { method: 'GET', path: '/test', retries: 1 },
+				},
+			})
+
+			await expect(proxy.action()).rejects.toThrow('HTTP 500: Internal Error')
+			expect(mockFetch).toHaveBeenCalledTimes(2) // Initial + 1 retry
+		})
+	})
+
+	describe('timeout logic', () => {
+		it('should throw ApiError(408) on timeout', async () => {
+			const mockFetch = vi.fn().mockImplementation(async (_url, { signal }) => {
+				return new Promise((resolve, reject) => {
+					// Wait longer than the timeout
+					const id = setTimeout(() => {
+						resolve({ ok: true, json: () => Promise.resolve({ success: true }) })
+					}, 100)
+					
+					signal?.addEventListener('abort', () => {
+						clearTimeout(id)
+						const e = new Error('The operation was aborted')
+						e.name = 'AbortError'
+						reject(e)
+					})
+				})
+			})
+			vi.stubGlobal('fetch', mockFetch)
+			
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				timeout: 20, // Short timeout
+				endpoints: {
+					slowAction: { method: 'GET', path: '/slow' },
+				},
+			})
+
+			await expect(proxy.slowAction()).rejects.toThrow('HTTP 408: Request Timeout')
+		})
+	})
+	describe('caching logic', () => {
+		it('should cache successful GET requests', async () => {
+			const mockFetch = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ data: 'cached' }),
+			})
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				endpoints: {
+					getData: { method: 'GET', path: '/data', cache: true },
+				},
+			})
+
+			// First call
+			const res1 = await proxy.getData()
+			expect(res1).toEqual({ data: 'cached' })
+			expect(mockFetch).toHaveBeenCalledTimes(1)
+
+			// Second call (should be cached)
+			const res2 = await proxy.getData()
+			expect(res2).toEqual({ data: 'cached' })
+			expect(mockFetch).toHaveBeenCalledTimes(1)
+		})
+
+		it('should respect custom TTL', async () => {
+			const mockFetch = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ data: 'ttl-test' }),
+			})
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				endpoints: {
+					getData: { method: 'GET', path: '/data', cache: 50 }, // 50ms TTL
+				},
+			})
+
+			await proxy.getData()
+			expect(mockFetch).toHaveBeenCalledTimes(1)
+
+			// Wait for TTL to expire
+			await new Promise((resolve) => setTimeout(resolve, 60))
+
+			await proxy.getData()
+			expect(mockFetch).toHaveBeenCalledTimes(2)
+		})
+
+		it('should use custom cache key generator', async () => {
+			const mockFetch = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ data: 'custom-key' }),
+			})
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				endpoints: {
+					getData: {
+						method: 'GET',
+						path: '/data',
+						cache: {
+							ttl: 1000,
+							key: (params) => `custom:${params.id}`,
+						},
+					},
+				},
+			})
+
+			await proxy.getData({ id: '1', other: 'a' })
+			await proxy.getData({ id: '1', other: 'b' }) // Different params, same key
+
+			expect(mockFetch).toHaveBeenCalledTimes(1)
+		})
+
+		it('should allow manual cache clearing', async () => {
+			const mockFetch = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ data: 'manual-clear' }),
+			})
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				endpoints: {
+					getData: { method: 'GET', path: '/data', cache: true },
+				},
+			})
+
+			await proxy.getData()
+			expect(mockFetch).toHaveBeenCalledTimes(1)
+
+			proxy.$cache.clear()
+
+			await proxy.getData()
+			expect(mockFetch).toHaveBeenCalledTimes(2)
+		})
+
+		it('should NOT cache error responses', async () => {
+			const mockFetch = vi.fn()
+				.mockResolvedValueOnce({ ok: false, status: 500, statusText: 'Error' })
+				.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ data: 'success' }) })
+			vi.stubGlobal('fetch', mockFetch)
+
+			const proxy = defineProxy({
+				baseUrl: 'https://api.example.com',
+				endpoints: {
+					getData: { method: 'GET', path: '/data', cache: true },
+				},
+			})
+
+			await expect(proxy.getData()).rejects.toThrow('HTTP 500: Error')
+			const res = await proxy.getData()
+			expect(res).toEqual({ data: 'success' })
+			expect(mockFetch).toHaveBeenCalledTimes(2)
 		})
 	})
 })

@@ -1,8 +1,18 @@
 import { Hono } from 'hono'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createPounceMiddleware } from '../../src/adapters/hono.js'
-import { clearSSRData, injectSSRData } from '../../src/lib/ssr/utils.js'
+import { createPounceMiddleware } from 'pounce-board/server'
+import { clearSSRData, injectSSRData } from 'pounce-board/server'
 
+/**
+ * @vocab "Test as Documentation"
+ * @description Verifies the SSR injection flow from data collection to HTML output.
+ * 
+ * Key behaviors validated here:
+ * 1. `injectSSRData()` collects data during request handling.
+ * 2. Collected data is injected into HTML responses as `<script type="application/json">` tags.
+ * 3. Multiple data points can be injected simultaneously.
+ * 4. JSON responses are NOT modified (injection is HTML-specific).
+ */
 describe('SSR Flow Integration', () => {
 	beforeEach(() => {
 		clearSSRData()

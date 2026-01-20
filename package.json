@@ -7,33 +7,31 @@
 	"types": "./dist/index.d.ts",
 	"exports": {
 		".": {
-			"import": "./dist/index.js",
-			"types": "./dist/index.d.ts"
+			"browser": {
+				"import": "./dist/client/index.js",
+				"types": "./dist/client/index.d.ts"
+			},
+			"node": {
+				"import": "./dist/server/index.js",
+				"types": "./dist/server/index.d.ts"
+			},
+			"default": {
+				"import": "./dist/index.js",
+				"types": "./dist/index.d.ts"
+			}
 		},
-		"./http": {
-			"import": "./dist/lib/http/index.js",
-			"types": "./dist/lib/http/index.d.ts"
+		"./client": {
+			"import": "./dist/client/index.js",
+			"types": "./dist/client/index.d.ts"
 		},
-		"./ssr": {
-			"import": "./dist/lib/ssr/index.js",
-			"types": "./dist/lib/ssr/index.d.ts"
-		},
-		"./router": {
-			"import": "./dist/lib/router/index.js",
-			"types": "./dist/lib/router/index.d.ts"
-		},
-		"./adapters/hono": {
-			"import": "./dist/adapters/hono.js",
-			"types": "./dist/adapters/hono.d.ts"
-		},
-		"./adapters/vercel": {
-			"import": "./dist/adapters/vercel.js",
-			"types": "./dist/adapters/vercel.d.ts"
+		"./server": {
+			"import": "./dist/server/index.js",
+			"types": "./dist/server/index.d.ts"
 		}
 	},
 	"scripts": {
 		"dev": "tsc --watch",
-		"build": "tsc",
+		"build": "tsc -p tsconfig.build.json",
 		"test": "vitest",
 		"test:unit": "vitest --project unit",
 		"test:integration": "vitest --project integration",

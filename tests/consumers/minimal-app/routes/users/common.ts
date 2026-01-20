@@ -1,4 +1,4 @@
-import type { Middleware, RequestContext } from 'pounce-board/http/core.js'
+import type { Middleware, RequestContext } from 'pounce-board/server'
 
 export const middleware: Middleware[] = [
 	async (ctx: RequestContext, next: () => Promise<Response>) => {

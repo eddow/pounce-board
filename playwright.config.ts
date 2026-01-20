@@ -21,10 +21,18 @@ export default defineConfig({
       use: { ...devices["Desktop Firefox"] },
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    cwd: "./tests/consumers/minimal-app",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-  },
+  webServer: [
+    {
+      command: "npm run dev",
+      cwd: "./tests/consumers/minimal-app",
+      url: "http://localhost:3000",
+      reuseExistingServer: false,
+    },
+    {
+      command: "npm run dev",
+      cwd: "./tests/consumers/blog-app",
+      url: "http://localhost:3001",
+      reuseExistingServer: false,
+    },
+  ],
 });

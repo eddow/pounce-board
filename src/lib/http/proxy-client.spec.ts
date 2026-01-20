@@ -17,7 +17,7 @@ describe('api client proxy integration', () => {
 			endpoints: {
 				getUser: {
 					method: 'GET',
-					path: '/users/{id}',
+					path: '/users/[id]',
 					mock: (params) => ({ id: params.id, name: 'Mock User' }),
 				},
 			},

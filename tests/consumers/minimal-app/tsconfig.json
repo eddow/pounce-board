@@ -3,6 +3,15 @@
 	"compilerOptions": {
 		"baseUrl": ".",
 		"paths": {
+			"pounce-board": [
+				"../../../src/index.ts"
+			],
+			"pounce-board/server": [
+				"../../../src/server/index.ts"
+			],
+			"pounce-board/client": [
+				"../../../src/client/index.ts"
+			],
 			"pounce-board/*": [
 				"../../../src/lib/*"
 			],

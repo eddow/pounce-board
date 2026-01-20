@@ -394,6 +394,10 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 - [ ] Add Arktype for validation
 - [ ] Add development dependencies (Vite, TypeScript, etc.)
 
+### 1.3 Build Setup
+- [ ] All the tsconfig.xxx.json, all the vite plugins &c. should be confgured automatically - each with one import
+- [ ] The server shouldn't have to be configured manually - all the route/middleware/... initialisation should be centralised by pounce-board, perhaps just exported from pounce-board so that it can be augmented
+
 ---
 
 ## Phase 2: Core HTTP Layer
@@ -417,7 +421,7 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 - [x] Implement `createErrorResponse(error, status)`
 - [x] Implement response compression utilities
 - [x] Add security headers helper
-- [ ] Audit global state for concurrency safety (e.g. `client.ts` singletons)
+- [x] Audit global state for concurrency safety (e.g. `client.ts` singletons)
 
 ---
 
@@ -451,11 +455,15 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 
 ### 3.4 Error Handling
 - [x] Implement typed error responses
-- [ ] Add retry logic (optional)
-- [ ] Add timeout handling
-- [ ] Finish the reflexion of [INTERCEPTORS.md](./analysis/INTERCEPTORS.md)
-- [ ] Add request/response interceptors
+- [x] Add retry logic
+- [x] Add timeout handling
+- [x] Add request/response interceptors
+- [x] Finish the reflexion of [INTERCEPTORS.md](./analysis/INTERCEPTORS.md)
+- [x] Make sure interceptors are usable on BE (for SSR but also for proxies, functionality forwarding, ...)
 
+### 3.5 SSR modules
+- [ ] Analyse integration with pure-glyf: bundle the CSS directly as include it in generated html
+- [ ] Use previous analyse to allow custom data bundlers
 ---
 
 ## Phase 4: SSR System
@@ -506,11 +514,11 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 - [x] Implement `mock(params)` for development mocking
 
 ### 5.3 Advanced Features
-- [ ] Support file uploads (FormData)
+- [x] Support file uploads (FormData)
 - [ ] Support streaming responses
-- [ ] Support request retries
-- [ ] Support request caching
-- [ ] Type inference from endpoint definitions
+- [x] Support request retries
+- [x] Support request caching
+- [x] Type inference from endpoint definitions
 
 ---
 
@@ -531,8 +539,9 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 
 ### 6.3 Handler Loading
 - [x] Load `index.ts` for backend handlers
-- [ ] Load `index.tsx` for frontend components
+- [x] Load `index.tsx` for frontend components
 - [x] Load `common.ts` for middleware
+- [x] Load `common.tsx` a layout
 - [ ] Load `types.d.ts` for shared types
 - [ ] Handle hot module replacement in dev
 
@@ -617,9 +626,9 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 - [ ] Type-safe context access in handlers
 
 ### 9.4 External Proxy Types
-- [ ] Infer types from `defineProxy()` config
+- [x] Infer types from `defineProxy()` config
 - [ ] Generate `.d.ts` from OpenAPI specs
-- [ ] Support Zod schema inference
+- [x] Support Zod schema inference
 
 ---
 
@@ -767,21 +776,21 @@ include: ['src/**/*.spec.ts', 'tests/integration/**/*.spec.ts'],
 **Integration Test TODOs:**
 
 #### `tests/integration/middleware-chain.spec.ts`
-- [ ] Test parent middleware runs before child middleware
-- [ ] Test grandparent → parent → child order
-- [ ] Test middleware from multiple `common.ts` files merge
-- [ ] Test auth middleware blocks unauthorized requests
-- [ ] Test context additions available in handlers
+- [x] Test parent middleware runs before child middleware
+- [x] Test grandparent → parent → child order
+- [x] Test middleware from multiple `common.ts` files merge
+- [x] Test auth middleware blocks unauthorized requests
+- [x] Test context additions available in handlers
 
 #### `tests/integration/route-scanner.spec.ts`
 - [x] Test `index.ts` handlers are loaded
-- [ ] Test `index.tsx` components are loaded (Backend router only tracks API handlers currently)
+- [x] Test `index.tsx` components are loaded (Backend router only tracks API handlers currently)
 - [ ] Test `types.d.ts` types are available
 - [x] Test `common.ts` middleware is attached
 - [ ] Test HMR reloads routes in development
 
 #### `tests/integration/ssr-flow.spec.ts`
-- [ ] Test SSR renders component with data
+- [x] Test SSR renders component with data
 - [x] Test API responses are injected as script tags
 - [ ] Test client hydrates from script tags
 - [ ] Test client falls back to fetch on miss

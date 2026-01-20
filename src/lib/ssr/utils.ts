@@ -1,65 +1,25 @@
-import { AsyncLocalStorage } from 'node:async_hooks'
+import { getContext, type RequestScope, runWithContext, createScope } from '../http/context.js'
+
 
 export type SSRDataMap = Record<string, { id: string; data: unknown }>
 
-/**
- * SSR Context - request-scoped container for SSR data
- */
-export interface SSRContext {
-	readonly id: symbol
-	responses: Map<string, unknown>
-	counter: number
-}
-
-// Storage for strict thread-safety in Node.js (AsyncLocalStorage)
-// In the browser (or runtimes without ALS), we fall back to a global variable since there's no concurrency
-const storage = typeof AsyncLocalStorage !== 'undefined' ? new AsyncLocalStorage<SSRContext>() : null
-
-// Fallback for browser/single-threaded environments
-let globalContext: SSRContext | null = null
-
-function getCurrentContext(): SSRContext | null {
-	if (storage) {
-		const store = storage.getStore()
-		if (store) return store
-	}
-	return globalContext
-}
+let globalClientCounter = 0
 
 /**
- * Create a new SSR context for a request
+ * Run a function within an SSR context (Legacy wrapper)
+ * Now delegates to runWithContext from lib/http/context
  */
-export function createSSRContext(): SSRContext {
-	return {
-		id: Symbol('ssr-context'),
-		responses: new Map(),
-		counter: 0,
-	}
-}
-
-/**
- * Run a function within an SSR context
- * Uses AsyncLocalStorage if available, otherwise global state
- */
-export async function withSSRContext<T>(fn: () => Promise<T>): Promise<{ result: T; context: SSRContext }> {
-	const ctx = createSSRContext()
-
-	if (storage) {
-		return storage.run(ctx, async () => {
-			const result = await fn()
-			return { result, context: ctx }
-		})
-	}
-
-	// Fallback for browser/environments without ALS
-	const prevContext = globalContext
-	globalContext = ctx
-	try {
+export async function withSSRContext<T>(
+	fn: () => Promise<T>
+): Promise<{ result: T; context: RequestScope }> {
+	const scope = createScope()
+	// Enable SSR by default if using this legacy wrapper, as it implies SSR usage
+	scope.config.ssr = true 
+	
+	return runWithContext(scope, async () => {
 		const result = await fn()
-		return { result, context: ctx }
-	} finally {
-		globalContext = prevContext
-	}
+		return { result, context: scope }
+	})
 }
 
 /**
@@ -75,29 +35,28 @@ export function getSSRId(url: string | URL): string {
 
 	// Add counter from current context if available
 	// On client (simulated hydration), we also increment to match server order
-	const ctx = getCurrentContext()
+	const ctx = getContext()
 	
 	// If we are in a context (Server or Client global), use counter
 	// If we are on client without strict context (just global var fallback), we still use it
 	// Note: Client needs to maintain order during hydration for this to work
 	let counter = 0
 	if (ctx) {
-		counter = ctx.counter++
+		counter = ctx.ssr.counter++
 	} else if (typeof window !== 'undefined') {
-		// If we are on client but outside withSSRContext, we might be in hydration or SPA nav
-		// For now, we can track a global counter if we want hydration matching?
-		// Actually, we probably don't need a context object on client, just a global counter
-		// But let's stick to the context pattern if possible, or fallback to random/0
-		
-		// If no context, we might be in a random fetch. 
-		// For unique ID in SPA, random is fine.
-		// Unsure if this matches hydration requirement?
-		// Assuming client app initializes a context or we rely on hydration logic elsewhere?
-		// Let's fallback to specific logic:
-		if (!globalContext) {
-			globalContext = createSSRContext()
-		}
-		counter = globalContext!.counter++
+		// If on client but no context active, we rely on a temporary global or 0
+		// ideally client app should wrap main() in a context too, but api() calls might be global
+		// For simplicity, without a context, we just use 0 or random?
+        // Actually, if we are on client, we likely want to use a global counter if not inside a context scope
+        // BUT current refactor removes globalContext var.
+        // Let's rely on the fact that if getContext() returns null, we are truly outside scope.
+        // Falls back to 0. Is this safe for hydration? 
+        // Hydration relies on determinstic ID generation.
+        // If client doesn't increment, IDs will collide (all 0).
+        // WE need a true global fallback for client-side legacy behavior.
+        // NOTE: Impl plan didn't specify global fallback behavior for client.
+        // I will implement a module-level fallback counter for client side ONLY.
+        counter = globalClientCounter++
 	}
 
 	return `pounce-data-${pathHash}-${counter}`
@@ -107,9 +66,9 @@ export function getSSRId(url: string | URL): string {
  * Inject SSR data (used server-side)
  */
 export function injectSSRData(id: string, data: unknown): void {
-	const ctx = getCurrentContext()
+	const ctx = getContext()
 	if (ctx) {
-		ctx.responses.set(id, data)
+		ctx.ssr.responses.set(id, data)
 	}
 }
 
@@ -117,11 +76,11 @@ export function injectSSRData(id: string, data: unknown): void {
  * Get all collected SSR responses as a map for injection
  */
 export function getCollectedSSRResponses(): SSRDataMap {
-	const ctx = getCurrentContext()
+	const ctx = getContext()
 	if (!ctx) return {}
 
 	const map: SSRDataMap = {}
-	for (const [id, data] of ctx.responses.entries()) {
+	for (const [id, data] of ctx.ssr.responses.entries()) {
 		map[id] = { id, data }
 	}
 	return map
@@ -131,11 +90,13 @@ export function getCollectedSSRResponses(): SSRDataMap {
  * Clear all SSR data
  */
 export function clearSSRData(): void {
-	const ctx = getCurrentContext()
+	const ctx = getContext()
 	if (ctx) {
-		ctx.responses.clear()
-		ctx.counter = 0
-	}
+		ctx.ssr.responses.clear()
+		ctx.ssr.counter = 0
+	} else if (typeof window !== 'undefined') {
+        globalClientCounter = 0
+    }
 }
 
 /**
@@ -169,8 +130,8 @@ export function injectApiResponses(html: string, responses: SSRDataMap): string 
 export function getSSRData<T>(id: string): T | null {
 	// 1. Server-side check
 	if (typeof document === 'undefined') {
-		const ctx = getCurrentContext()
-		return (ctx?.responses.get(id) as T) || null
+		const ctx = getContext()
+		return (ctx?.ssr.responses.get(id) as T) || null
 	}
 
 	// 2. Client-side check (DOM)

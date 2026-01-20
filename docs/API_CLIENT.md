@@ -115,3 +115,38 @@ config.timeout = 5000; // 5 seconds globally
 
 await api('/slow', { timeout: 30000 }).get(); // 30 seconds for this request
 ```
+
+## Retries
+
+The API client supports automatic retries for failed requests (5xx status codes or network timeouts/errors).
+
+```typescript
+import { config, api } from 'pounce-board';
+
+// Global configuration
+config.retries = 3; 
+config.retryDelay = 1000; // 1 second between retries
+
+// Per-request override
+await api('/unstable', { retries: 5, retryDelay: 500 }).get();
+```
+
+- **Retriable errors**: Requests are retried if the response status is `>= 500` or `408` (Timeout), or if a network error occurs.
+- **SSR support**: Retries also work during SSR dispatch for internal API calls.
+
+## File Uploads
+
+The `api()` client supports `FormData` for file uploads. When a `FormData` object is passed as the body, the client automatically omits the `application/json` content-type, allowing the browser to set the correct multipart boundary.
+
+```typescript
+import { api } from 'pounce-board';
+
+const formData = new FormData();
+formData.append('profile_pic', fileInput.files[0]);
+formData.append('username', 'alice');
+
+// The client detects FormData and handles headers correctly
+const response = await api('/user/profile').post(formData);
+```
+
+File uploads work across both frontend navigation and SSR dispatch. However, for SSR file uploads, ensure your server environment (like Node.js or edge runtimes) correctly handles multipart parsing.

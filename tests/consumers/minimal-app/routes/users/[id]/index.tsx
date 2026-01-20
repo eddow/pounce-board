@@ -1,6 +1,5 @@
 import { reactive } from 'mutts'
-import { api } from 'pounce-board/http/client.js'
-import { getSSRData } from 'pounce-board/ssr/utils.js'
+import { api } from 'pounce-board'
 
 export default function UserDetail({ params }: { params: { id: string } }) {
 	const state = reactive({

@@ -1,11 +1,11 @@
 import { getRequestListener } from '@hono/node-server'
-import * as fs from 'fs'
 import { Hono } from 'hono'
-import { createServer } from 'http'
-import * as path from 'path'
-import { createPounceMiddleware } from 'pounce-board/adapters/hono.js'
-import { api } from 'pounce-board/http/client.js'
+import { createServer } from 'node:http'
+import * as fs from 'node:fs'
+import * as path from 'node:path'
 import { createServer as createViteServer } from 'vite'
+import { api, enableSSR } from 'pounce-board'
+import { createPounceMiddleware } from 'pounce-board/server'
 
 // Import route handlers
 import * as indexRoute from './routes/index.js'
@@ -17,12 +17,26 @@ async function startServer() {
 
 	// Create Vite server in middleware mode
 	const vite = await createViteServer({
-		server: { middlewareMode: true },
+		server: {
+			middlewareMode: true,
+			fs: {
+				// Allow serving files from the workspace root (for pounce-ts, mutts, etc.)
+				// TODO to have eal node_modules entrants
+				allow: ['../../../..'],
+			},
+		},
+		resolve: {
+			alias: [
+				{ find: 'pounce-board', replacement: path.resolve(process.cwd(), 'node_modules/pounce-board') },
+			]
+		},
 		appType: 'custom',
 	})
 
-	// Pounce middleware for generic Hono handling
-	app.use('*', createPounceMiddleware())
+	// Pounce Middleware
+	app.use('*', await createPounceMiddleware({
+		routesDir: './routes',
+	}))
 
 	// API Routes
 	app.get('/api/data', async (c) => {
@@ -42,9 +56,10 @@ async function startServer() {
 		// Trigger data collection for SSR hydration
 		if (url.pathname.startsWith('/users/')) {
 			try {
+				enableSSR()
 				await api(url.pathname).get()
 			} catch (e) {
-				console.error('SSR data collection failed', e)
+				console.error('[minimal-app] SSR data collection failed for', url.pathname, e)
 			}
 		}
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearSSRData, getCollectedSSRResponses } from '../ssr/utils.js'
 import {
 	api,
@@ -185,6 +185,36 @@ describe('api client SSR integration', () => {
 			)
 			const headers = mockFetch.mock.calls[0][1].headers as Headers
 			expect(headers.get('Content-Type')).toBe('application/json')
+		})
+
+		it('should support post with FormData via functional proxy', async () => {
+			const formData = new FormData()
+			formData.append('file', new Blob(['test'], { type: 'text/plain' }), 'test.txt')
+
+			const mockFetch = vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ uploaded: true }), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' },
+				})
+			)
+			vi.stubGlobal('fetch', mockFetch)
+
+			const result = await post(formData)
+			expect(result).toEqual({ uploaded: true })
+			expect(mockFetch).toHaveBeenCalledWith(
+				new URL('http://localhost/current/page'),
+				expect.objectContaining({
+					method: 'POST',
+					body: formData,
+				})
+			)
+			const headers = mockFetch.mock.calls[0][1].headers
+			// FormData should have a multipart/form-data Content-Type header (set by the browser/Request)
+			if (headers instanceof Headers) {
+				expect(headers.get('Content-Type')).toContain('multipart/form-data')
+			} else {
+				expect((headers as any)['Content-Type']).toContain('multipart/form-data')
+			}
 		})
 	})
 })
@@ -533,7 +563,19 @@ describe('Path resolution', () => {
 	})
 })
 
+
+
 describe('SSR server-side dispatch', () => {
+    let mockScope: any
+    let runWithContext: any
+    let createScope: any
+
+    beforeAll(async () => {
+        const ctxModule = await import('../http/context.js')
+        runWithContext = ctxModule.runWithContext
+        createScope = ctxModule.createScope
+    })
+
 	beforeEach(() => {
 		clearSSRData()
 		clearRouteRegistry()
@@ -596,6 +638,37 @@ describe('SSR server-side dispatch', () => {
 		const callContext = mockHandler.mock.calls[0][0]
 		const requestBody = await callContext.request.json()
 		expect(requestBody).toEqual(body)
+	})
+
+	it('should dispatch POST with FormData to handler in SSR', async () => {
+		const mockHandler = vi.fn().mockResolvedValue({
+			status: 201,
+			data: { uploaded: true },
+		})
+
+		const mockRegistry: RouteRegistry = {
+			match: vi.fn().mockReturnValue({
+				handler: mockHandler,
+				middlewareStack: [],
+				params: {},
+			}),
+		}
+
+		setRouteRegistry(mockRegistry)
+		enableSSR()
+
+		const formData = new FormData()
+		formData.append('foo', 'bar')
+		
+		const result = await api('/upload').post(formData)
+
+		expect(result).toEqual({ uploaded: true })
+		expect(mockHandler).toHaveBeenCalled()
+		
+		const callContext = mockHandler.mock.calls[0][0]
+		// In a real Request, the body is converted to a ReadableStream
+		expect(callContext.request.body).toBeDefined()
+		expect(callContext.request.body).not.toBeNull()
 	})
 
 	it('should dispatch PUT with body to handler', async () => {
@@ -726,15 +799,18 @@ describe('SSR server-side dispatch', () => {
 		}
 
 		setRouteRegistry(mockRegistry)
-		enableSSR()
+        
+        await runWithContext(createScope(), async () => {
+		    enableSSR()
 
-		await api('/users').get()
+		    await api('/users').get()
 
-		// Verify SSR data was injected
-		const collected = getCollectedSSRResponses()
-		const entries = Object.values(collected)
-		expect(entries.length).toBe(1)
-		expect(entries[0].data).toEqual({ userList: ['Alice', 'Bob'] })
+		    // Verify SSR data was injected
+		    const collected = getCollectedSSRResponses()
+		    const entries = Object.values(collected)
+		    expect(entries.length).toBe(1)
+		    expect(entries[0].data).toEqual({ userList: ['Alice', 'Bob'] })
+        })
 	})
 
 	it('should throw error when no registry is set in SSR mode', async () => {
@@ -774,24 +850,27 @@ describe('SSR server-side dispatch', () => {
 		}
 
 		setRouteRegistry(mockRegistry)
-		enableSSR()
+        
+        await runWithContext(createScope(), async () => {
+		    enableSSR()
 
-		// Make two requests with different query params
-		await api('/search').get({ q: 'test1' })
-		await api('/search').get({ q: 'test2' })
+		    // Make two requests with different query params
+		    await api('/search').get({ q: 'test1' })
+		    await api('/search').get({ q: 'test2' })
 
-		// Get the collected responses
-		const collected = getCollectedSSRResponses()
-		const entries = Object.entries(collected)
-		expect(entries.length).toBe(2)
+		    // Get the collected responses
+		    const collected = getCollectedSSRResponses()
+		    const entries = Object.entries(collected)
+		    expect(entries.length).toBe(2)
 
-		// Verify the SSR ID is based on URL with query params (base64 encoded)
-		// The ID should differ for different query params
-		const id1 = Object.keys(collected).find(k => k.includes(btoa('/search?q=test1').replace(/[=/+]/g, '')))
-		const id2 = Object.keys(collected).find(k => k.includes(btoa('/search?q=test2').replace(/[=/+]/g, '')))
-		expect(id1).toBeDefined()
-		expect(id2).toBeDefined()
-		expect(id1).not.toBe(id2)
+            // Verify the SSR ID is based on URL with query params (base64 encoded)
+            // The ID should differ for different query params
+            const id1 = Object.keys(collected).find(k => k.includes(btoa('/search?q=test1').replace(/[=/+]/g, '')))
+            const id2 = Object.keys(collected).find(k => k.includes(btoa('/search?q=test2').replace(/[=/+]/g, '')))
+            expect(id1).toBeDefined()
+            expect(id2).toBeDefined()
+            expect(id1).not.toBe(id2)
+        })
 	})
 
 	it('should extract params from registry and pass to handler context', async () => {
@@ -1030,7 +1109,7 @@ describe('API Interceptors', () => {
 		intercept('**', async (req, next) => {
 			const res = await next(req)
 			const json = await res.json()
-			res.setJson({ ...json, intercepted: true })
+			res.setData({ ...json, intercepted: true })
 			return res
 		})
 
@@ -1075,7 +1154,7 @@ describe('API Interceptors', () => {
 			req.headers.set('X-SSR-Intercept', 'true')
 			const res = await next(req)
 			const data = await res.json()
-			res.setJson({ ...data, augmented: true })
+			res.setData({ ...data, augmented: true })
 			return res
 		})
 
@@ -1141,3 +1220,207 @@ describe('API Interceptors', () => {
 		expect(headers.get('X-Active')).toBeNull()
 	})
 })
+
+describe('Retry logic', () => {
+	beforeEach(() => {
+		disableSSR()
+		vi.stubGlobal('document', {
+			getElementById: vi.fn().mockReturnValue(null),
+		})
+		vi.stubGlobal('window', {
+			location: {
+				href: 'http://localhost/test',
+				origin: 'http://localhost',
+			},
+		})
+		config.retries = 0
+		config.retryDelay = 0
+		vi.useFakeTimers()
+	})
+
+	afterEach(() => {
+		vi.unstubAllGlobals()
+		vi.useRealTimers()
+		config.retries = 0
+		config.retryDelay = 0
+	})
+
+	it('should retry on 500 error and eventually succeed', async () => {
+		const mockFetch = vi.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 500, statusText: 'Internal Server Error' }))
+			.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { 
+				status: 200, 
+				headers: { 'Content-Type': 'application/json' } 
+			}))
+		vi.stubGlobal('fetch', mockFetch)
+
+		const result = await api('/test', { retries: 1 }).get()
+		expect(result).toEqual({ ok: true })
+		expect(mockFetch).toHaveBeenCalledTimes(2)
+	})
+
+	it('should retry on timeout and eventually succeed', async () => {
+		const mockFetch = vi.fn()
+			.mockRejectedValueOnce(new ApiError(408, 'Request Timeout', null, 'http://localhost/test'))
+			.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { 
+				status: 200, 
+				headers: { 'Content-Type': 'application/json' } 
+			}))
+		vi.stubGlobal('fetch', mockFetch)
+
+		const result = await api('/test', { retries: 1 }).get()
+		expect(result).toEqual({ ok: true })
+		expect(mockFetch).toHaveBeenCalledTimes(2)
+	})
+
+	it('should fail after maximum retries', async () => {
+		const mockFetch = vi.fn().mockResolvedValue(new Response(null, { 
+			status: 503, 
+			statusText: 'Service Unavailable' 
+		}))
+		vi.stubGlobal('fetch', mockFetch)
+
+		await expect(api('/test', { retries: 2 }).get()).rejects.toThrow(ApiError)
+		expect(mockFetch).toHaveBeenCalledTimes(3) // Initial + 2 retries
+	})
+
+	it('should respect global config.retries', async () => {
+		config.retries = 2
+		const mockFetch = vi.fn().mockResolvedValue(new Response(null, { 
+			status: 500, 
+			statusText: 'Server Error' 
+		}))
+		vi.stubGlobal('fetch', mockFetch)
+
+		await expect(api('/test').get()).rejects.toThrow(ApiError)
+		expect(mockFetch).toHaveBeenCalledTimes(3)
+	})
+
+	it('should support retries in SSR mode', async () => {
+		const mockHandler = vi.fn()
+			.mockResolvedValueOnce({ status: 500, error: 'Server Error' })
+			.mockResolvedValueOnce({ status: 200, data: { ssr: 'ok' } })
+
+		const mockRegistry: RouteRegistry = {
+			match: vi.fn().mockReturnValue({
+				handler: mockHandler,
+				middlewareStack: [],
+				params: {},
+			}),
+		}
+
+		setRouteRegistry(mockRegistry)
+		enableSSR()
+
+		const result = await api('/ssr-retry', { retries: 1 }).get()
+		expect(result).toEqual({ ssr: 'ok' })
+		expect(mockHandler).toHaveBeenCalledTimes(2)
+		
+		disableSSR()
+		clearRouteRegistry()
+	})
+
+	it('should delay between retries if retryDelay is set', async () => {
+		const mockFetch = vi.fn()
+			.mockResolvedValueOnce(new Response(null, { status: 500 }))
+			.mockResolvedValueOnce(new Response(JSON.stringify({ delayed: true }), { 
+				status: 200, 
+				headers: { 'Content-Type': 'application/json' } 
+			}))
+		vi.stubGlobal('fetch', mockFetch)
+
+		const promise = api('/test', { retries: 1, retryDelay: 1000 }).get()
+		
+		// Wait for microtasks
+		await Promise.resolve()
+		
+		// Should not have finished yet
+		expect(mockFetch).toHaveBeenCalledTimes(1)
+		
+		// Advance time
+		await vi.advanceTimersByTimeAsync(1001)
+		
+		const result = await promise
+		expect(result).toEqual({ delayed: true })
+		expect(mockFetch).toHaveBeenCalledTimes(2)
+	})
+})
+
+describe('Context Isolation', () => {
+    beforeEach(() => {
+        disableSSR()
+        clearInterceptors()
+        vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Response(JSON.stringify({ ok: true }), { headers: {'Content-Type': 'application/json'} })))
+    })
+
+    afterEach(() => {
+        vi.unstubAllGlobals()
+    })
+
+    it('should isolate interceptors between contexts', async () => {
+        const { runWithContext, createScope } = await import('../http/context.js')
+        const { intercept, api } = await import('./client.js')
+
+        const scope1 = createScope()
+        const scope2 = createScope()
+
+        let result1: any
+        let result2: any
+
+        // Run in scope 1
+        await runWithContext(scope1, async () => {
+            intercept('**', async (req, next) => {
+                const res = await next(req)
+                const data = await res.json()
+                res.setData({ ...data, scope: 1 })
+                return res
+            })
+            result1 = await api('/test').get()
+        })
+
+        // Run in scope 2
+        await runWithContext(scope2, async () => {
+           intercept('**', async (req, next) => {
+                const res = await next(req)
+                const data = await res.json()
+                res.setData({ ...data, scope: 2 })
+                return res
+            })
+            result2 = await api('/test').get()
+        })
+
+        expect(result1).toEqual({ ok: true, scope: 1 })
+        expect(result2).toEqual({ ok: true, scope: 2 })
+    })
+
+    it('should isolate SSR mode between contexts', async () => {
+         const { runWithContext, createScope } = await import('../http/context.js')
+         const { enableSSR, api, setRouteRegistry } = await import('./client.js')
+
+         const scope1 = createScope()
+         const scope2 = createScope()
+        
+         const mockHandler = vi.fn().mockResolvedValue({ status: 200, data: { backend: true } })
+         setRouteRegistry({
+             match: () => ({ handler: mockHandler, middlewareStack: [], params: {} })
+         })
+
+         // Scope 1: SSR Enabled
+         const p1 = runWithContext(scope1, async () => {
+             enableSSR()
+             return api('/test').get()
+         })
+
+         // Scope 2: SSR Disabled (Client mode)
+         const p2 = runWithContext(scope2, async () => {
+             // Default is disabled
+             return api('/test').get()
+         })
+
+         const [r1, r2] = await Promise.all([p1, p2])
+
+         expect(r1).toEqual({ backend: true }) // Dispatched to handler
+         expect(r2).toEqual({ ok: true }) // Fetched from network (mockFetch)
+    })
+})
+

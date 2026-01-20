@@ -1,4 +1,4 @@
-import { type RequestContext } from 'pounce-board/http/core.js'
+import type { RequestContext } from 'pounce-board'
 
 export async function get({ params, user, timestamp }: RequestContext) {
 	return {
