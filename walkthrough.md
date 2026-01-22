@@ -335,7 +335,7 @@ export default function Dashboard() {
 
 **Client execution** (after hydration):
 ```
-1. React/Component hydrates
+1. Component hydrates
 2. api("/api/stats").get() is called again
 3. Checks for <script id="pounce-data-L2FwaS9zdGF0cw">
 4. Finds it, reads {"total":42}, removes tag
@@ -466,26 +466,29 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 - [ ] Use previous analyse to allow custom data bundlers
 ---
 
-## Phase 4: SSR System
+## Phase 4: SSR Integration (Phased)
 
-### 4.1 Server-Side Injection (`lib/ssr/utils.ts`)
-- [x] Implement `injectApiResponses(html, responses)`
-- [x] Generate unique script tag IDs (implemented with `AsyncLocalStorage` context)
-- [x] Handle JSON serialization safely (XSS prevention)
-- [ ] Support streaming responses (optional)
+### 4.1 Phase 1: Basic Node/SSR Support (`pounce-ts`)
+- [x] Implement `renderToString(element, scope)` in `pounce-ts/server`
+- [x] Support `linkedom` as an optional server-side dependency
+- [x] Verify synchronous component rendering in Node
 
-### 4.2 Client-Side Hydration
-- [x] Implement `getSSRData<T>(id)`
-- [x] Handle missing script tags gracefully (via debug logging)
-- [x] Implement one-time consumption (prevent memory leaks)
-- [x] Add debug logging for hydration misses
-- [x] Unify SSR hydration logic between client and server utils
+### 4.2 Phase 2: Async Data Tracking
+- [x] Implement SSR Promise Tracker in `pounce-board/lib/http/context`
+- [x] Update `api()` client to register pending SSR requests
+- [x] Implement `renderToStringAsync` in `pounce-ts/server`
+- [x] Verify components wait for data before final HTML generation
 
-### 4.3 SSR Integration
-- [ ] Create SSR context for tracking API calls
-- [ ] Integrate with pounce-ts rendering
-- [ ] Handle async component data fetching
-- [ ] Document SSR patterns and gotchas
+### 4.3 Phase 3: Pounce-Board Integration
+- [x] Update Hono adapter to use `renderToStringAsync`
+- [x] Update CLI dev server to match routes and render components
+- [x] Integrate layouts (`common.tsx`) into the SSR render chain
+- [x] Resolve framework instance isolation via `vite.ssrLoadModule`
+
+### 4.4 Phase 4: Documentation and Testing
+- [x] Update documentation with SSR usage patterns and async data fetching
+- [x] Add integration tests for async SSR
+- [x] Verify that hydrated components match server-rendered markup
 
 ---
 
@@ -580,11 +583,11 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 ## Phase 8: CLI Tooling
 
 ### 8.1 Development Server (`cli/dev.ts`)
-- [ ] Implement `pounce dev` command
-- [ ] Integrate Vite for HMR
-- [ ] Handle API route hot reloading
-- [ ] Display route table on startup
-- [ ] Add port configuration
+- [x] Implement `pounce dev` command
+- [x] Integrate Vite for HMR (using middleware mode)
+- [x] Handle API route hot reloading (via route tree cache clearing)
+- [x] Display route table on startup (Basic version implemented)
+- [x] Add port configuration
 
 ### 8.2 Build Command (`cli/build.ts`)
 - [ ] Implement `pounce build` command

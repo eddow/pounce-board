@@ -26,21 +26,19 @@ export default function UserDetail({ params }: { params: { id: string } }) {
 			state.user = data
 		})
 
-	const u = () => state.user
-
 	return (
 		<div id="user-profile">
 			<h1>User Profile</h1>
-			<div if={u}>
-				<p>ID: {() => u()?.id}</p>
-				<p>Name: {() => u()?.name}</p>
-				<p>Role: {() => u()?.role}</p>
+			<div if={state.user}>
+				<p>ID: {() => state.user!.id}</p>
+				<p>Name: {() => state.user!.name}</p>
+				<p>Role: {() => state.user!.role}</p>
 				<p id="context-info">
-					Auth: {() => u()?.contextUser?.id} ({() => u()?.contextUser?.role})
+					Auth: {() => state.user!.contextUser.id} ({() => state.user!.contextUser.role})
 				</p>
-				<p id="timestamp">Time: {() => (u() ? new Date(u()!.requestTimestamp).toLocaleString() : '')}</p>
+				<p id="timestamp">Time: {() => new Date(state.user!.requestTimestamp).toLocaleString()}</p>
 			</div>
-			<p if={() => !u()}>Loading user {params.id}...</p>
+			<p else>Loading user {params.id}...</p>
 		</div>
 	)
 }

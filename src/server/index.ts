@@ -58,6 +58,8 @@ export {
 	getContext,
 	runWithContext,
 	createScope,
+	trackSSRPromise,
+	flushSSRPromises,
 	type RequestScope,
 } from '../lib/http/context.js'
 

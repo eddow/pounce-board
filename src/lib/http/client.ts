@@ -21,7 +21,7 @@ export type InterceptorMiddleware = (
 	next: (req: Request) => Promise<PounceResponse>
 ) => Promise<PounceResponse>
 
-import { addContextInterceptor, getContext } from '../http/context.js'
+import { addContextInterceptor, getContext, trackSSRPromise } from '../http/context.js'
 
 interface InterceptorEntry {
 	pattern: string | RegExp
@@ -124,21 +124,30 @@ export interface RouteRegistry {
 	} | null
 }
 
-let routeRegistry: RouteRegistry | null = null
+// Use globalThis to ensure singleton across multiple module loads in SSR
+const REGISTRY_SYMBOL = Symbol.for('__POUNCE_ROUTE_REGISTRY__')
 
 /**
  * Set the route registry for server-side dispatch
  * Called by adapters during app initialization
  */
 export function setRouteRegistry(registry: RouteRegistry): void {
-	routeRegistry = registry
+	const ctx = getContext()
+	if (ctx) {
+		ctx.routeRegistry = registry
+	}
+	;(globalThis as any)[REGISTRY_SYMBOL] = registry
+}
+
+export function getRouteRegistry(): RouteRegistry | null {
+	return (globalThis as any)[REGISTRY_SYMBOL] || null
 }
 
 /**
  * Clear the route registry (for testing)
  */
 export function clearRouteRegistry(): void {
-	routeRegistry = null
+	;(globalThis as any)[REGISTRY_SYMBOL] = null
 }
 
 /**
@@ -146,7 +155,11 @@ export function clearRouteRegistry(): void {
  * @internal
  */
 async function dispatchToHandler(request: Request): Promise<Response> {
-	if (!routeRegistry) {
+	const ctx = getContext()
+	const processRegistry = (globalThis as any)[REGISTRY_SYMBOL]
+	const activeRegistry = ctx?.routeRegistry || processRegistry
+
+	if (!activeRegistry) {
 		throw new Error(
 			'[pounce-board] SSR dispatch failed: No route registry set. ' +
 				'Ensure setRouteRegistry() is called during app initialization.'
@@ -156,7 +169,7 @@ async function dispatchToHandler(request: Request): Promise<Response> {
 	const url = new URL(request.url)
 	const path = url.pathname
 	const method = request.method.toUpperCase() as HttpMethod
-	const match = routeRegistry.match(path, method)
+	const match = activeRegistry.match(path, method)
 
 	if (!match) {
 		throw new Error(`[pounce-board] SSR dispatch failed: No handler found for ${method} ${path}`)
@@ -173,19 +186,27 @@ async function dispatchToHandler(request: Request): Promise<Response> {
 	return response
 }
 
+const CONFIG_SYMBOL = Symbol.for('__POUNCE_CONFIG__')
+
+const DEFAULT_CONFIG = {
+	timeout: 10000,
+	ssr: false,
+	retries: 0,
+	retryDelay: 100,
+}
+
+function getGlobalConfig() {
+	const g = globalThis as any
+	if (!g[CONFIG_SYMBOL]) {
+		g[CONFIG_SYMBOL] = { ...DEFAULT_CONFIG }
+	}
+	return g[CONFIG_SYMBOL]
+}
+
 /**
  * Global configuration for pounce-board
  */
-export const config = {
-	/** Default timeout for API requests in milliseconds */
-	timeout: 10000,
-	/** Whether SSR mode is enabled (server-side dispatch, hydration tracking) */
-	ssr: false,
-	/** Default retry count for API requests */
-	retries: 0,
-	/** Default retry delay in milliseconds */
-	retryDelay: 100,
-}
+export const config = getGlobalConfig()
 
 /**
  * Enable SSR mode for server-side rendering
@@ -292,15 +313,24 @@ function apiClient(
 			url = new URL(input)
 		} else if (input.startsWith('/')) {
 			// Site-absolute
-			const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+			const ctx = getContext()
+			const origin = (typeof window !== 'undefined' && window.location) 
+				? window.location.origin 
+				: (ctx?.origin || 'http://localhost')
 			url = new URL(input, origin)
 		} else if (input.startsWith('.')) {
 			// Site-relative
-			const base = typeof window !== 'undefined' ? window.location.href : 'http://localhost'
+			const ctx = getContext()
+			const base = (typeof window !== 'undefined' && window.location) 
+				? window.location.href 
+				: (ctx?.origin || 'http://localhost')
 			url = new URL(input, base)
 		} else {
 			// Assume site-absolute if no scheme
-			const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+			const ctx = getContext()
+			const origin = (typeof window !== 'undefined' && window.location) 
+				? window.location.origin 
+				: (ctx?.origin || 'http://localhost')
 			url = new URL(`/${input}`, origin)
 		}
 	} else {
@@ -365,77 +395,93 @@ function apiClient(
 		const requestHeaders: Record<string, string> = isFormData ? {} : { 'Content-Type': 'application/json' }
 		const requestBody = isFormData ? (body as any) : body !== undefined ? JSON.stringify(body) : undefined
 
-		let lastError: any = null
+		const doRequest = async (): Promise<T> => {
+			const activeCtx = getContext()
+			const isSSR = activeCtx ? activeCtx.config.ssr ?? config.ssr : config.ssr
+			
+			if (isSSR && method === 'GET') {
+				const currentSsrId = getSSRId(currentUrl)
+				const existingData = getSSRData(currentSsrId)
+				if (existingData !== undefined) {
+					return existingData as T
+				}
+			}
 
-		for (let attempt = 0; attempt <= maxRetries; attempt++) {
-			try {
-				const request = new Request(currentUrl.toString(), {
-					method,
-					headers: requestHeaders,
-					body: requestBody,
-				})
+			let lastError: any = null
 
-				const finalHandler = async (req: Request): Promise<PounceResponse> => {
-					let response: Response
-					
-					// Re-evaluate config in case it changed (it shouldn't but good to be safe)
-					// Actually we captured currentConfig above, but ssr flag might be toggled via enableSSR() inside a middleware?
-					// Let's re-fetch ssr flag from context.
+			for (let attempt = 0; attempt <= maxRetries; attempt++) {
+				try {
+					const request = new Request(currentUrl.toString(), {
+						method,
+						headers: requestHeaders,
+						body: requestBody,
+					})
+
+					const finalHandler = async (req: Request): Promise<PounceResponse> => {
+						let response: Response
+						
+						const activeCtx = getContext()
+						const isSSR = activeCtx ? activeCtx.config.ssr ?? config.ssr : config.ssr
+
+						if (isSSR) {
+							response = await dispatchWithTimeout(req)
+						} else {
+							response = await fetchWithTimeout(new URL(req.url), {
+								method,
+								headers: req.headers,
+								body: requestBody,
+							})
+						}
+						return PounceResponse.from(response)
+					}
+
+					const response = await runInterceptors(request, finalHandler)
+
+					if (!response.ok) {
+						let errorData = null
+						try {
+							if (response.headers.get('Content-Type')?.includes('application/json')) {
+								errorData = await response.json()
+							}
+						} catch {
+							/* ignore */
+						}
+						throw new ApiError(response.status, response.statusText, errorData, request.url)
+					}
+
+					const data = (await response.json()) as T
 					const activeCtx = getContext()
 					const isSSR = activeCtx ? activeCtx.config.ssr ?? config.ssr : config.ssr
 
 					if (isSSR) {
-						response = await dispatchWithTimeout(req)
-					} else {
-						response = await fetchWithTimeout(new URL(req.url), {
-							method,
-							headers: req.headers,
-							body: requestBody,
-						})
+						const currentSsrId = getSSRId(currentUrl)
+						injectSSRData(currentSsrId, data)
 					}
-					return PounceResponse.from(response)
-				}
+					return data
+				} catch (error: any) {
+					lastError = error
+					const shouldRetry =
+						attempt < maxRetries &&
+						(error instanceof ApiError ? error.status >= 500 || error.status === 408 : true)
 
-				const response = await runInterceptors(request, finalHandler)
-
-				if (!response.ok) {
-					let errorData = null
-					try {
-						if (response.headers.get('Content-Type')?.includes('application/json')) {
-							errorData = await response.json()
+					if (shouldRetry) {
+						if (retryDelay > 0) {
+							await new Promise((resolve) => setTimeout(resolve, retryDelay))
 						}
-					} catch {
-						/* ignore */
+						continue
 					}
-					throw new ApiError(response.status, response.statusText, errorData, request.url)
+					throw error
 				}
-
-				const data = (await response.json()) as T
-				const activeCtx = getContext()
-				const isSSR = activeCtx ? activeCtx.config.ssr ?? config.ssr : config.ssr
-
-				if (isSSR) {
-					const currentSsrId = getSSRId(currentUrl)
-					injectSSRData(currentSsrId, data)
-				}
-				return data
-			} catch (error: any) {
-				lastError = error
-				// Only retry on certain errors (status >= 500 or 408, network error)
-				const shouldRetry =
-					attempt < maxRetries &&
-					(error instanceof ApiError ? error.status >= 500 || error.status === 408 : true)
-
-				if (shouldRetry) {
-					if (retryDelay > 0) {
-						await new Promise((resolve) => setTimeout(resolve, retryDelay))
-					}
-					continue
-				}
-				throw error
 			}
+			throw lastError
 		}
-		throw lastError
+
+		const promise = doRequest()
+		const activeCtx = getContext()
+		if (activeCtx && (activeCtx.config.ssr ?? config.ssr)) {
+			trackSSRPromise(promise)
+		}
+		return promise
 	}
 
 	return {
@@ -455,7 +501,7 @@ function apiClient(
 			// 1. Check for hydration data first (client only)
 			if (!isSSR) {
 				const cachedData = getSSRData<T>(currentSsrId)
-				if (cachedData) return cachedData
+				if (cachedData !== undefined) return cachedData
 			}
 
 			return requestWithRetry<T>('GET', currentUrl)

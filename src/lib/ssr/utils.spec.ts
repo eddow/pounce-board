@@ -113,17 +113,16 @@ describe('ssr utils', () => {
 	})
 
 	describe('SSRContext', () => {
-		it('should generate unique IDs for the same URL within the same context', async () => {
+		it('should generate same IDs for the same URL within the same context (for caching)', async () => {
 			const { withSSRContext, getSSRId } = await import('./utils.js')
 			
 			await withSSRContext(async () => {
 				const id1 = getSSRId('/foo')
 				const id2 = getSSRId('/foo')
-				expect(id1).not.toBe(id2)
+				expect(id1).toBe(id2)
 				// IDs are hashed, so they won't contain the raw path 'foo'
 				// expect(id1).toContain('foo') 
 				// expect(id2).toContain('foo')
-				expect(id1.split('-').pop()).not.toBe(id2.split('-').pop())
 			})
 		})
 

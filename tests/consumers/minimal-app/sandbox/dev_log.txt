@@ -1,0 +1,43 @@
+
+> minimal-app@0.1.0 dev
+> tsx ../../../src/cli/index.ts dev --port 3003
+
+WebSocket server error: Port 24678 is already in use
+
+  🚀 Pounce-Board dev server starting...
+  http://localhost:3003
+
+[pounce dev] Rendering component: IndexPage (type: function)
+[pounce dev] Wrapping with layout: RootLayout (type: function)
+[pounce dev] Rendering component: UserDetail (type: function)
+[pounce dev] Wrapping with layout: UsersLayout (type: function)
+[pounce dev] Wrapping with layout: RootLayout (type: function)
+[pounce dev] Rendering component: UserDetail (type: function)
+[pounce dev] Wrapping with layout: UsersLayout (type: function)
+[pounce dev] Wrapping with layout: RootLayout (type: function)
+11:58:58 PM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+11:58:58 PM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:00:54 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:00:54 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:00:54 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/utils.ts
+12:00:54 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/utils.ts
+12:01:05 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/utils.ts
+12:01:05 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/utils.ts
+12:02:16 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:02:16 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:03:23 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:03:23 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:05:15 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:05:15 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:05:16 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/index.ts
+12:05:16 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/index.ts
+12:05:16 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/server.ts
+12:05:16 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/namespaced.ts
+12:05:16 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/namespaced.ts
+12:05:16 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/utils.ts
+12:05:16 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/utils.ts
+12:05:16 AM [vite] (client) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:05:16 AM [vite] (ssr) page reload /home/fmdm/dev/ownk/pounce-ts/src/lib/renderer.ts
+12:05:16 AM [vite] ../../../../pounce-ts/src/babel-plugin-jsx-reactive.ts changed, restarting server...
+WebSocket server error: Port 24678 is already in use
+12:05:16 AM [vite] server restarted.

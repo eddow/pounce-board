@@ -1,49 +1,42 @@
 {
-	"extends": "../../../tsconfig.json",
 	"compilerOptions": {
-		"baseUrl": ".",
-		"paths": {
-			"pounce-board": [
-				"../../../src/index.ts"
-			],
-			"pounce-board/server": [
-				"../../../src/server/index.ts"
-			],
-			"pounce-board/client": [
-				"../../../src/client/index.ts"
-			],
-			"pounce-board/*": [
-				"../../../src/lib/*"
-			],
-			"pounce-board/http/*": [
-				"../../../src/lib/http/*"
-			],
-			"pounce-board/adapters/*": [
-				"../../../src/adapters/*"
-			],
-			"pounce-ts": [
-				"./node_modules/pounce-ts/src/index.d.ts"
-			],
-			"pounce-ts/jsx-runtime": [
-				"./node_modules/pounce-ts/src/runtime/jsx-runtime.ts"
-			],
-			"pounce-ts/*": [
-				"./node_modules/pounce-ts/src/*"
-			]
-		},
+		"target": "ES2022",
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"noEmit": true,
 		"jsx": "react-jsx",
 		"jsxImportSource": "pounce-ts",
-		"rootDir": "../../..",
-		"noEmit": true,
-		"skipLibCheck": true
+		"baseUrl": ".",
+		"paths": {
+			"pounce-ts": [
+				"../../../../pounce-ts/src/lib"
+			],
+			"pounce-ts/*": [
+				"../../../../pounce-ts/src/lib/*"
+			],
+			"mutts": [
+				"../../../../mutts/src"
+			],
+			"mutts/*": [
+				"../../../../mutts/src/*"
+			],
+			"pounce-board": [
+				"../../../../pounce-board/src/server/index.ts"
+			],
+			"pounce-board/client": [
+				"../../../../pounce-board/src/client/index.ts"
+			],
+			"pounce-board/server": [
+				"../../../../pounce-board/src/server/index.ts"
+			]
+		}
 	},
 	"include": [
-		"routes/**/*",
-		"server.ts",
-		"vite.config.ts",
-		"./node_modules/pounce-ts/src/index.d.ts"
-	],
-	"exclude": [
-		"dist"
+		"**/*",
+		"../../../../pounce-ts/**/*",
+		"../../../../mutts/**/*"
 	]
 }

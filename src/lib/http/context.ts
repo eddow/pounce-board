@@ -29,26 +29,55 @@ export interface RequestScope {
 		id: symbol
 		responses: Map<string, unknown>
 		counter: number
+		promises: Promise<unknown>[]
 	}
 	config: Partial<ClientConfig>
 	interceptors: InterceptorEntry[]
+	origin?: string
+	routeRegistry?: any
 }
 
 // Storage for strict thread-safety in Node.js (AsyncLocalStorage)
-let storage: AsyncLocalStorage<RequestScope> | null = null
+const STORAGE_KEY = Symbol.for('__POUNCE_STORAGE__')
 
-// Fallback for browser/single-threaded environments
-let globalCtx: RequestScope | null = null
+/** @internal */
+export function getStorage(): AsyncLocalStorage<RequestScope> | null {
+	const g = globalThis as any
+	return g[STORAGE_KEY] || null
+}
+
+export function setStorage(storage: AsyncLocalStorage<RequestScope>) {
+	const g = globalThis as any
+	g[STORAGE_KEY] = storage
+}
+
+async function ensureStorage(): Promise<AsyncLocalStorage<RequestScope>> {
+	const g = globalThis as any
+	if (g[STORAGE_KEY]) {
+		return g[STORAGE_KEY]
+	}
+
+	const { AsyncLocalStorage } = await import('node:async_hooks')
+	const s = new AsyncLocalStorage<RequestScope>()
+	g[STORAGE_KEY] = s
+	return s
+}
 
 /**
  * Get the current request scope
  */
 export function getContext(): RequestScope | null {
+	const storage = getStorage()
 	if (storage) {
 		const store = storage.getStore()
 		if (store) return store
 	}
-	return globalCtx
+	// Fallback for browser/single-threaded environments or shared SSR state
+	return (globalThis as any).__POUNCE_CONTEXT__ || null
+}
+
+function setGlobalCtx(ctx: RequestScope | null) {
+	;(globalThis as any).__POUNCE_CONTEXT__ = ctx
 }
 
 /**
@@ -60,6 +89,7 @@ export function createScope(config: Partial<ClientConfig> = {}): RequestScope {
 			id: Symbol('ssr-context'),
 			responses: new Map(),
 			counter: 0,
+			promises: [],
 		},
 		config,
 		interceptors: [],
@@ -74,26 +104,19 @@ export async function runWithContext<T>(
 	fn: () => Promise<T>
 ): Promise<T> {
 	// Initialize storage if needed (Node.js only)
-	if (!storage && typeof process !== 'undefined') {
-		try {
-			const { AsyncLocalStorage } = await import('node:async_hooks')
-			storage = new AsyncLocalStorage<RequestScope>()
-		} catch {
-			// Ignore if not available (browser)
-		}
-	}
+	const storage = await ensureStorage()
 
 	if (storage) {
 		return storage.run(scope, fn)
 	}
 
 	// Fallback
-	const prev = globalCtx
-	globalCtx = scope
+	const prev = getContext()
+	setGlobalCtx(scope)
 	try {
 		return await fn()
 	} finally {
-		globalCtx = prev
+		setGlobalCtx(prev)
 	}
 }
 
@@ -115,4 +138,27 @@ export function addContextInterceptor(pattern: string | RegExp, handler: Interce
 		console.warn('[pounce-board] Attempted to add context interceptor outside of a context')
 		return () => {}
 	}
+}
+
+/**
+ * Track a promise in the current SSR context
+ */
+export function trackSSRPromise(promise: Promise<unknown>) {
+	const ctx = getContext()
+	if (ctx) {
+		ctx.ssr.promises.push(promise)
+	}
+}
+
+/**
+ * Get and clear all pending SSR promises
+ */
+export function flushSSRPromises(): Promise<unknown>[] {
+	const ctx = getContext()
+	if (ctx) {
+		const promises = ctx.ssr.promises
+		ctx.ssr.promises = []
+		return promises
+	}
+	return []
 }

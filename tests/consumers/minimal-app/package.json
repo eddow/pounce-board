@@ -4,18 +4,22 @@
 	"version": "0.1.0",
 	"type": "module",
 	"scripts": {
-		"dev": "tsx server.ts",
+		"dev": "tsx ../../../src/cli/index.ts dev",
 		"build": "vite build",
 		"preview": "vite preview"
 	},
 	"dependencies": {
-		"pounce-board": "file:../../..",
-		"pounce-ts": "file:../../../../pounce-ts",
-		"mutts": "file:../../../../mutts",
+		"@hono/node-server": "latest",
 		"hono": "latest",
-		"@hono/node-server": "latest"
+		"mutts": "link:../../../../mutts",
+		"pounce-board": "link:../../..",
+		"pounce-ts": "link:../../../../pounce-ts"
 	},
 	"devDependencies": {
+		"@babel/core": "^7.28.6",
+		"@babel/plugin-proposal-decorators": "^7.28.6",
+		"@babel/plugin-transform-react-jsx": "^7.28.6",
+		"@babel/plugin-transform-typescript": "^7.28.6",
 		"tsx": "latest",
 		"vite": "latest"
 	}

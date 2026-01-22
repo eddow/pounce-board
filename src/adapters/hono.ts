@@ -14,6 +14,8 @@ import { setRouteRegistry } from '../lib/http/client.js'
 export interface PounceMiddlewareOptions {
 	/** Path to routes directory. Defaults to './routes' */
 	routesDir?: string
+	/** Custom module importer (e.g. vite.ssrLoadModule) */
+	importFn?: (path: string) => Promise<any>
 }
 
 // Cached route tree (lazily initialized per routesDir)
@@ -26,17 +28,30 @@ export function createPounceMiddleware(options?: PounceMiddlewareOptions): Middl
 	const routesDir = options?.routesDir ?? './routes'
 
 	return async (c: Context, next: () => Promise<void>): Promise<Response | void> => {
+		const url = new URL(c.req.url)
+		const origin = `${url.protocol}//${url.host}`
+		
 		return (await withSSRContext(async () => {
 			// Build route tree once (lazy init per routesDir)
 			let routeTree = routeTreeCache.get(routesDir)
 			if (!routeTree) {
-				routeTree = await buildRouteTree(routesDir)
+				routeTree = await buildRouteTree(routesDir, options?.importFn)
 				routeTreeCache.set(routesDir, routeTree)
 			}
 
 			// Set route registry for SSR dispatch
 			setRouteRegistry({
-				match: (path, method) => matchRoute(path, routeTree!, method),
+				match: (path, method) => {
+					const m = matchRoute(path, routeTree!, method)
+					if (m && m.handler) {
+						return {
+							handler: m.handler,
+							middlewareStack: m.middlewareStack,
+							params: m.params,
+						}
+					}
+					return null
+				},
 			})
 
 			// Match the request path
@@ -53,7 +68,7 @@ export function createPounceMiddleware(options?: PounceMiddlewareOptions): Middl
 				// fall through to allow SSR/HTML rendering.
 				if (method === 'GET' && prefersHtml) {
 					// Fall through
-				} else {
+				} else if (match.handler) {
 					// Build request context
 					const ctx = {
 						request: c.req.raw,
@@ -90,7 +105,7 @@ export function createPounceMiddleware(options?: PounceMiddlewareOptions): Middl
 				// Content-Length needs to be recalculated or removed
 				c.res.headers.delete('Content-Length')
 			}
-		})).result
+		}, origin)).result
 	}
 }
 

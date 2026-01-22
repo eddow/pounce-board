@@ -22,9 +22,21 @@ const data = await api('/api/users').get();
    - The server renders the HTML and injects the stored data into `<script id="pounce-data-...">` tags.
    - The ID is deterministic, based on the request URL.
 
-3. **Client Side (First Load)**:
+3. **Component-Level Rendering**:
+   - `pounce-board` uses `pounce-ts/server` utilities to render the matched route component into the HTML template.
+   - It supports asynchronous data fetching via a **Reactive Rendering Pipeline**:
+     1. A single `withSSR` block established a shared DOM environment (`linkedom`).
+     2. The component is mounted into a virtual `#root` div.
+     3. `renderToStringAsync` waits for any registered promises.
+     4. As promises resolve, `pounce-ts` reactivity automatically updates the virtual DOM.
+     5. The process repeats if new promises are triggered, until the state stabilizes.
+     6. The final `innerHTML` of the root div is returned.
+   - **Critical**: To ensure reactivity works correctly across module boundaries, the framework (`pounce-ts`, `pounce-board`, `mutts`) must be loaded from the same Vite instance using `vite.ssrLoadModule`.
+
+4. **Client Side (First Load)**:
    - When `api()` is called during hydration, it checks `getSSRData`.
    - If data exists in the script tag, it returns it immediately without a network request.
+   - The UI is hydrated by `pounce-ts` using the same component logic, but since the markup is already present, it attaches to the existing DOM nodes.
 
 4. **Client Side (Navigation)**:
    - On subsequent navigations, `api()` falls back to a standard `fetch` call.
@@ -36,3 +48,22 @@ const data = await api('/api/users').get();
 - **Site-Absolute**: `/api/users` -> Relative to current origin.
 - **Site-Relative**: `./stats` -> Relative to current page.
 - **Proxy Object**: If a proxy client (created with `defineProxy`) is passed, it returns it directly.
+
+## Best Practices
+
+### 1. Unified Framework Instance
+The most critical requirement for SSR in `pounce-board` is ensuring that a **single instance** of the reactive framework (`mutts`, `pounce-ts`) is used throughout the request lifecycle.
+- In development, use `vite.ssrLoadModule` to load all framework utilities.
+- Avoid using standard Node `import()` for framework code if you are also using Vite's SSR loader for components.
+
+### 2. Idempotent API Calls
+Ensure your API handlers are idempotent for `GET` requests, as they may be called multiple times during the reactive SSR passes. `pounce-board` automatically deduplicates `api().get()` calls within the same request context after the first successful resolution.
+
+### 3. Avoid Browser-Only Globals
+While `pounce-board` provides a shimmed DOM environment (`linkedom`), avoid direct access to browser-only globals like `window.localStorage` or `navigator` during the initial component render.
+
+## Common Pitfalls
+
+- **Empty Root**: If `<div id="root"></div>` is empty in the response, ensure you are calling `renderToStringAsync` and that your route component is correctly exported.
+- **Hydration Mismatch**: Ensure that the server-rendered HTML matches what the client would generate initially. Excessive use of random values or current time in the initial render can cause mismatches.
+- **Infinite Layout Loops**: Ensure layouts (`common.tsx`) correctly render their `children` prop once, and avoid complex logic that might trigger re-renders of the entire layout tree unnecessarily.

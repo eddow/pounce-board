@@ -7,7 +7,7 @@
 - **Universal API Client**: Single `api()` function works with absolute, site-absolute, and site-relative URLs
 
 ## Status & Caveats (Updated 2026-01-20)
-- **Status**: Core routing, Hono integration, and SSR injection are implemented and tested. Package exports refactored to support conditional loading.
+- **Status**: Core routing, Hono integration, SSR injection, and basic CLI (`pounce dev`) are implemented.
 - **Caveat**: `walkthrough.md` may lag behind code. Verified tests are the source of truth.
 - **Drift**: Some test files referenced in plans might have different names (e.g., `route-scanner.spec.ts` vs `route-loading.spec.ts`).
 

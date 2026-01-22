@@ -244,7 +244,10 @@ export function matchRoute(
  * 
  * This uses node:fs and is intended for server-side usage.
  */
-export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> {
+export async function buildRouteTree(
+	routesDir: string,
+	importFn: (path: string) => Promise<any> = (p) => import(/* @vite-ignore */ toFileUrl(p))
+): Promise<RouteTreeNode> {
 	const root: RouteTreeNode = {
 		segment: '',
 		isDynamic: false,
@@ -253,7 +256,6 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 	}
 
 	async function scan(dir: string, node: RouteTreeNode) {
-
 		if (path.relative(routesDir, dir).split(path.sep).length > 20) {
 			console.warn(`[pounce-board] Route recursion depth exceeded at ${dir}`)
 			return
@@ -272,7 +274,7 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 			if (entry.isFile()) {
 				if (entry.name === 'common.ts') {
 					try {
-						const mod = await import(toFileUrl(entryPath))
+						const mod = await importFn(entryPath)
 						if (mod.middleware) {
 							node.middleware = mod.middleware
 						}
@@ -281,7 +283,7 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 					}
 				} else if (entry.name === 'common.tsx') {
 					try {
-						const mod = await import(toFileUrl(entryPath))
+						const mod = await importFn(entryPath)
 						if (mod.default) {
 							node.layout = mod.default
 						}
@@ -290,7 +292,7 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 					}
 				} else if (entry.name === 'index.ts') {
 					try {
-						const mod = await import(toFileUrl(entryPath))
+						const mod = await importFn(entryPath)
 						const handlers: Record<string, RouteHandler> = {}
 						const methods = ['get', 'post', 'put', 'del', 'patch', 'delete'] // include delete alias
 						for (const method of methods) {
@@ -308,7 +310,7 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 					}
 				} else if (entry.name === 'index.tsx') {
 					try {
-						const mod = await import(toFileUrl(entryPath))
+						const mod = await importFn(entryPath)
 						if (mod.default) {
 							node.component = mod.default
 						}
@@ -335,7 +337,7 @@ export async function buildRouteTree(routesDir: string): Promise<RouteTreeNode> 
 					}
 
 					try {
-						const mod = await import(toFileUrl(entryPath))
+						const mod = await importFn(entryPath)
 						
 						if (entry.name.endsWith('.ts')) {
 							const handlers: Record<string, RouteHandler> = {}

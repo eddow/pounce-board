@@ -29,6 +29,12 @@
 			],
 			"pounce-board/server": [
 				"./src/server/index.ts"
+			],
+			"pounce-ts": [
+				"../pounce-ts/src/lib/index.ts"
+			],
+			"mutts": [
+				"../mutts/src/index.ts"
 			]
 		}
 	},
