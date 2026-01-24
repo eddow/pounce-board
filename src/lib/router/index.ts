@@ -58,6 +58,8 @@ export type RouteTreeNode = {
 	layout?: any
 	/** True if this is a route group (folder in parentheses) */
 	isRouteGroup?: boolean
+	/** Optional name for the route (exported as const name = "...") */
+	name?: string
 }
 
 /**
@@ -305,6 +307,9 @@ export async function buildRouteTree(
 						}
 						// Don't overwrite if empty, checks are done lazily
 						node.handlers = handlers
+						if (typeof mod.name === 'string') {
+							node.name = mod.name
+						}
 					} catch (e) {
 						console.error(`Failed to load handlers from ${entryPath}`, e)
 					}
@@ -313,6 +318,9 @@ export async function buildRouteTree(
 						const mod = await importFn(entryPath)
 						if (mod.default) {
 							node.component = mod.default
+						}
+						if (typeof mod.name === 'string') {
+							node.name = mod.name
 						}
 					} catch (e) {
 						console.error(`Failed to load component from ${entryPath}`, e)
@@ -339,6 +347,10 @@ export async function buildRouteTree(
 					try {
 						const mod = await importFn(entryPath)
 						
+						if (typeof mod.name === 'string') {
+							childNode.name = mod.name
+						}
+
 						if (entry.name.endsWith('.ts')) {
 							const handlers: Record<string, RouteHandler> = {}
 							const methods = ['get', 'post', 'put', 'del', 'patch', 'delete']
@@ -381,6 +393,39 @@ export async function buildRouteTree(
 
 	await scan(routesDir, root)
 	return root
+}
+
+/**
+ * Collect named routes from the tree.
+ * Returns a map of RouteName -> PathTemplate (e.g. "user-detail" -> "/users/[id]")
+ */
+export function collectNamedRoutes(
+	node: RouteTreeNode,
+	basePath = ''
+): Record<string, string> {
+	const routes: Record<string, string> = {}
+
+	// If this node has a name, add it
+	if (node.name) {
+		routes[node.name] = basePath || '/'
+	}
+
+	for (const child of node.children.values()) {
+		let childPath = basePath
+		if (!child.isRouteGroup) {
+			const segment = child.isCatchAll
+				? `[...${child.paramName || 'slug'}]`
+				: child.isDynamic
+					? `[${child.paramName || 'id'}]`
+					: child.segment
+
+			childPath = basePath === '/' ? `/${segment}` : `${basePath}/${segment}`
+		}
+
+		Object.assign(routes, collectNamedRoutes(child, childPath))
+	}
+
+	return routes
 }
 
 /**

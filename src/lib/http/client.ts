@@ -150,6 +150,74 @@ export function clearRouteRegistry(): void {
 	;(globalThis as any)[REGISTRY_SYMBOL] = null
 }
 
+const NAMED_ROUTES_SYMBOL = Symbol.for('__POUNCE_NAMED_ROUTES__')
+
+/**
+ * Set the named routes map (Name -> Path Template)
+ */
+export function setNamedRoutes(map: Record<string, string>): void {
+	;(globalThis as any)[NAMED_ROUTES_SYMBOL] = map
+}
+
+/**
+ * Get the named routes map
+ */
+export function getNamedRoutes(): Record<string, string> {
+	const g = globalThis as any
+	if (g[NAMED_ROUTES_SYMBOL]) return g[NAMED_ROUTES_SYMBOL]
+
+	// Check for SSR injection (browser side)
+	const ssrMap = getSSRData<Record<string, string>>('pounce-named-routes')
+	if (ssrMap) {
+		g[NAMED_ROUTES_SYMBOL] = ssrMap
+		return ssrMap
+	}
+
+	return {}
+}
+
+/**
+ * Resolve a named route to a URL path
+ */
+export function resolveNamedRoute(name: string, params: Record<string, string> = {}): string {
+	const routes = getNamedRoutes()
+	const template = routes[name]
+
+	if (!template) {
+		throw new Error(`[pounce-board] Named route not found: "${name}"`)
+	}
+
+	// Replace params in template
+	let path = template
+	for (const [key, value] of Object.entries(params)) {
+		// Replace [key] or [...key]
+		// We need to be careful with optional/catch-all syntax
+		// Simple approach: replace exact brackets first
+
+		// If template has [key], replace it
+		if (path.includes(`[${key}]`)) {
+			path = path.replace(`[${key}]`, encodeURIComponent(value))
+		} else if (path.includes(`[...${key}]`)) {
+			// Catch all, usually passed as "a/b/c"
+			// If value contains slashes, we don't encode them?
+			// Usually we assume value is the full path segment(s).
+			path = path.replace(`[...${key}]`, value) // Don't encode assuming user passes path
+		}
+	}
+
+	// Check if any brackets remain (unresolved params)
+	if (path.match(/\[.*?\]/)) {
+		console.warn(`[pounce-board] Route "${name}" has unresolved parameters in "${path}"`)
+	}
+
+	return path
+}
+
+export interface NamedRouteDef {
+	name: string
+	params?: Record<string, string>
+}
+
 /**
  * Dispatch directly to a route handler (server-side, no network)
  * @internal
@@ -289,12 +357,17 @@ async function runInterceptors(
  * - api.get() // Targets current route (pendant)
  */
 function apiClient(
-	input: string | URL | object,
+	input: string | URL | object | NamedRouteDef,
 	options: { timeout?: number; retries?: number; retryDelay?: number } = {}
 ): ApiClientInstance {
-	// If input is a proxy object (not a string/URL), return it directly
+	// If input is a proxy object (not a string/URL/NamedRouteDef), return it directly
 	if (typeof input === 'object' && input !== null && !(input instanceof URL)) {
-		return input as ApiClientInstance
+		// Check if it's a NamedRouteDef
+		if ('name' in input && typeof (input as any).name === 'string') {
+			// It is a named route definition, proceed to processing
+		} else {
+			return input as ApiClientInstance
+		}
 	}
 
 	const ctx = getContext()
@@ -307,7 +380,16 @@ function apiClient(
 	// Normalize input to URL
 	let url: URL
 
-	if (typeof input === 'string') {
+	if (typeof input === 'object' && !(input instanceof URL) && 'name' in input) {
+		const def = input as NamedRouteDef
+		const path = resolveNamedRoute(def.name, def.params)
+
+		const ctx = getContext()
+		const origin = (typeof window !== 'undefined' && window.location)
+			? window.location.origin
+			: (ctx?.origin || 'http://localhost')
+		url = new URL(path, origin)
+	} else if (typeof input === 'string') {
 		if (input.startsWith('http://') || input.startsWith('https://')) {
 			// Absolute URL
 			url = new URL(input)
@@ -321,9 +403,16 @@ function apiClient(
 		} else if (input.startsWith('.')) {
 			// Site-relative
 			const ctx = getContext()
-			const base = (typeof window !== 'undefined' && window.location) 
-				? window.location.href 
-				: (ctx?.origin || 'http://localhost')
+
+			let base: string
+			if (typeof window !== 'undefined' && window.location) {
+				base = window.location.href
+			} else if (ctx?.url) {
+				base = ctx.url
+			} else {
+				base = ctx?.origin || 'http://localhost'
+			}
+
 			url = new URL(input, base)
 		} else {
 			// Assume site-absolute if no scheme

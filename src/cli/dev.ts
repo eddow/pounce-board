@@ -79,7 +79,6 @@ export async function runDevServer(options: DevServerOptions = {}) {
 		const { withSSRContext, injectApiResponses, getCollectedSSRResponses } = await import('../lib/ssr/utils.js')
 
 		// Run all SSR operations within a proper context
-		const origin = `${url.protocol}//${url.host}`
 		const { result, context } = await withSSRContext(async () => {
 			// Try to call the API handler for the same path to pre-populate hydration data
 			try {
@@ -144,7 +143,7 @@ export async function runDevServer(options: DevServerOptions = {}) {
 			}
 			
 			return template
-		}, origin)
+		}, c.req.url)
 
 		// If result is a Response (error case), return it directly
 		if (result instanceof Response) {

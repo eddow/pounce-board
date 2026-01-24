@@ -34,6 +34,7 @@ export interface RequestScope {
 	config: Partial<ClientConfig>
 	interceptors: InterceptorEntry[]
 	origin?: string
+	url?: string
 	routeRegistry?: any
 }
 

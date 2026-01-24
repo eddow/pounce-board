@@ -7,9 +7,9 @@ import type { Context, MiddlewareHandler } from 'hono'
 import { Hono } from 'hono'
 import { runMiddlewares } from '../lib/http/core.js'
 import { enableSSR } from '../lib/http/client.js'
-import { buildRouteTree, matchRoute, type RouteTreeNode } from '../lib/router/index.js'
+import { buildRouteTree, matchRoute, type RouteTreeNode, collectNamedRoutes } from '../lib/router/index.js'
 import { getCollectedSSRResponses, injectApiResponses, withSSRContext } from '../lib/ssr/utils.js'
-import { setRouteRegistry } from '../lib/http/client.js'
+import { setRouteRegistry, setNamedRoutes } from '../lib/http/client.js'
 
 export interface PounceMiddlewareOptions {
 	/** Path to routes directory. Defaults to './routes' */
@@ -19,7 +19,11 @@ export interface PounceMiddlewareOptions {
 }
 
 // Cached route tree (lazily initialized per routesDir)
-const routeTreeCache = new Map<string, RouteTreeNode>()
+interface CachedRoutes {
+	tree: RouteTreeNode
+	namedRoutes: Record<string, string>
+}
+const routeTreeCache = new Map<string, CachedRoutes>()
 
 /**
  * Create Hono middleware that handles pounce-board routes
@@ -28,21 +32,20 @@ export function createPounceMiddleware(options?: PounceMiddlewareOptions): Middl
 	const routesDir = options?.routesDir ?? './routes'
 
 	return async (c: Context, next: () => Promise<void>): Promise<Response | void> => {
-		const url = new URL(c.req.url)
-		const origin = `${url.protocol}//${url.host}`
-		
 		return (await withSSRContext(async () => {
 			// Build route tree once (lazy init per routesDir)
-			let routeTree = routeTreeCache.get(routesDir)
-			if (!routeTree) {
-				routeTree = await buildRouteTree(routesDir, options?.importFn)
-				routeTreeCache.set(routesDir, routeTree)
+			let cached = routeTreeCache.get(routesDir)
+			if (!cached) {
+				const tree = await buildRouteTree(routesDir, options?.importFn)
+				const namedRoutes = collectNamedRoutes(tree)
+				cached = { tree, namedRoutes }
+				routeTreeCache.set(routesDir, cached)
 			}
 
 			// Set route registry for SSR dispatch
 			setRouteRegistry({
 				match: (path, method) => {
-					const m = matchRoute(path, routeTree!, method)
+					const m = matchRoute(path, cached!.tree, method)
 					if (m && m.handler) {
 						return {
 							handler: m.handler,
@@ -54,10 +57,13 @@ export function createPounceMiddleware(options?: PounceMiddlewareOptions): Middl
 				},
 			})
 
+			// Set named routes for server-side resolution
+			setNamedRoutes(cached.namedRoutes)
+
 			// Match the request path
 			const method = c.req.method.toUpperCase()
 			const url = new URL(c.req.url)
-			const match = matchRoute(url.pathname, routeTree, method)
+			const match = matchRoute(url.pathname, cached.tree, method)
 
 			const accept = c.req.header('Accept') || ''
 			const prefersHtml = accept.includes('text/html')
@@ -94,6 +100,12 @@ export function createPounceMiddleware(options?: PounceMiddlewareOptions): Middl
 				const html = await c.res.text()
 				const ssrData = getCollectedSSRResponses()
 
+				// Inject named routes map for client-side usage
+				ssrData['pounce-named-routes'] = {
+					id: 'pounce-named-routes',
+					data: cached!.namedRoutes
+				}
+
 				// Inject script tags into the HTML body
 				const finalHtml = injectApiResponses(html, ssrData)
 
@@ -105,7 +117,7 @@ export function createPounceMiddleware(options?: PounceMiddlewareOptions): Middl
 				// Content-Length needs to be recalculated or removed
 				c.res.headers.delete('Content-Length')
 			}
-		}, origin)).result
+		}, c.req.url)).result
 	}
 }
 

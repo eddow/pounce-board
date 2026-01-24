@@ -11,12 +11,31 @@ let globalClientCounter = 0
  */
 export async function withSSRContext<T>(
 	fn: () => Promise<T>,
-	origin?: string
+	urlOrOrigin?: string
 ): Promise<{ result: T; context: RequestScope }> {
 	// Always create a new scope for nested isolation
 	const existing = getContext()
 	const scope = createScope(existing?.config)
-	scope.origin = origin || existing?.origin
+
+	let origin: string | undefined = existing?.origin
+	let url: string | undefined = existing?.url
+
+	if (urlOrOrigin) {
+		if (urlOrOrigin.startsWith('http')) {
+			try {
+				const u = new URL(urlOrOrigin)
+				origin = u.origin
+				url = urlOrOrigin
+			} catch {
+				origin = urlOrOrigin
+			}
+		} else {
+			origin = urlOrOrigin
+		}
+	}
+
+	scope.origin = origin
+	scope.url = url
 	scope.routeRegistry = existing?.routeRegistry
 	// We do NOT inherit responses by default to maintain isolation as per tests
 	
