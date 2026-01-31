@@ -13,6 +13,7 @@ export default defineConfig({
 			'pounce-board': resolve(__dirname, '../../../src/client/index.ts'),
 			'pounce-ts/jsx-runtime': resolve(__dirname, '../../../../pounce-ts/src/runtime/jsx-runtime.ts'),
 			'pounce-ts/jsx-dev-runtime': resolve(__dirname, '../../../../pounce-ts/src/runtime/jsx-dev-runtime.ts'),
+			'pounce-ts/server': resolve(__dirname, '../../../../pounce-ts/src/lib/server.ts'),
 			'pounce-ts': resolve(__dirname, '../../../../pounce-ts/src/lib/index.ts'),
 			'mutts': resolve(__dirname, '../../../../mutts/src/index.ts'),
 			'@pounce/runtime/jsx-runtime': resolve(__dirname, '../../../../pounce-ts/src/runtime/jsx-runtime.ts'),

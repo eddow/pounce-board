@@ -1,7 +1,8 @@
 import { Hono } from 'hono'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPounceMiddleware } from 'pounce-board/server'
 import { clearSSRData, injectSSRData } from 'pounce-board/server'
+import { api } from 'pounce-board'
 
 /**
  * @vocab "Test as Documentation"
@@ -76,5 +77,47 @@ describe('SSR Flow Integration', () => {
 
 		expect(body).toBe('{"ok":true}')
 		expect(body).not.toContain('script')
+	})
+
+	it('should automatically track api() calls during SSR and inject results', async () => {
+		const app = new Hono()
+		app.use('*', createPounceMiddleware())
+
+		// Mock global fetch for this test
+		const mockFetch = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify({ auto: 'tracked' }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' },
+			})
+		)
+		global.fetch = mockFetch
+
+		app.get('/auto-api', async (c) => {
+			// Call api() without awaiting it immediately to test async tracking?
+			// Actually, api() returns a promise. We usually await it to get data for the component.
+			// But even if we await it, the tracking happens inside api().
+			// The key is that withSSRContext waits for all tracked promises to settle before finishing.
+			const data = await api('https://example.com/data').get()
+			return c.html(`<html><body>Data: ${JSON.stringify(data)}</body></html>`)
+		})
+
+		const res = await app.request('/auto-api')
+		const html = await res.text()
+
+		// 1. Verify fetch was called
+		// client.ts calls fetch with a URL object as first arg
+		expect(mockFetch).toHaveBeenCalledWith(
+			expect.objectContaining({ href: 'https://example.com/data' }),
+			expect.any(Object)
+		)
+
+		// 2. Verify data was rendered in HTML (standard behavior)
+		expect(html).toContain('Data: {"auto":"tracked"}')
+
+		// 3. Verify Pounce automatically injected the data script for hydration
+		// The ID is deterministic based on the URL
+		// We can check just for the content since ID generation is internal (though deterministic)
+		expect(html).toContain('{"auto":"tracked"}')
+		expect(html).toContain('<script type="application/json" id="')
 	})
 })

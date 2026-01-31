@@ -26,4 +26,4 @@ export type {
 	HttpMethod,
 } from './lib/http/core.js'
 
-
+export { defineRoute, type RouteDefinition } from './lib/router/defs.js'

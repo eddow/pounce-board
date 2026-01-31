@@ -30,7 +30,14 @@
   - **Client (first load)**: Reads from `<script id="pounce-data-{base64}">` tags
   - **Client (navigation)**: Standard fetch
 - **SSR ID Generation**: Deterministic base64-encoded path for hydration keys
+- **CSS Injection**: Automatically collects and injects styles from `pounce-ui` (including `pure-glyf`)
 - **Hydration**: Data injected via script tags, not global window object
+- **Synchronous Hydration**: `api().get()` returns a "Smart Promise" with a `.hydrated` property.
+  ```tsx
+  const req = api('/user').get()
+  const state = reactive({ user: req.hydrated }) // T | undefined
+  if (!state.user) req.then(u => state.user = u)
+  ```
 - **Interceptors**: `config.interceptors.request/response` arrays. **Unique**: These run during SSR dispatch (not just `fetch`), so headers set by interceptors are visible to handlers.
 
 ## Hono Integration

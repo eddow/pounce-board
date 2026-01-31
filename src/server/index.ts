@@ -14,6 +14,8 @@ export {
 	type RouteParams,
 } from '../lib/router/index.js'
 
+export { defineRoute, type RouteDefinition } from '../lib/router/defs.js'
+
 // HTTP core
 export {
 	runMiddlewares,

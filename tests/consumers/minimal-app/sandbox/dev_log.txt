@@ -41,3 +41,9 @@ WebSocket server error: Port 24678 is already in use
 12:05:16 AM [vite] ../../../../pounce-ts/src/babel-plugin-jsx-reactive.ts changed, restarting server...
 WebSocket server error: Port 24678 is already in use
 12:05:16 AM [vite] server restarted.
+12:22:05 AM [vite] vite.config.ts changed, restarting server...
+12:22:05 AM [vite] (client) Re-optimizing dependencies because vite config has changed
+12:22:05 AM [vite] server restarted.
+12:22:26 AM [vite] vite.config.ts changed, restarting server...
+12:22:26 AM [vite] (client) Re-optimizing dependencies because vite config has changed
+12:22:26 AM [vite] server restarted.

@@ -22,3 +22,5 @@ export { PounceResponse } from '../lib/http/response.js'
 
 // SSR hydration (client-side consumption)
 export { getSSRData, getSSRId } from '../lib/ssr/utils.js'
+
+export { defineRoute, type RouteDefinition } from '../lib/router/defs.js'

@@ -4,7 +4,7 @@ import * as fs from 'node:fs'
 import { createServer } from 'node:http'
 import * as path from 'node:path'
 import { createServer as createViteServer } from 'vite'
-import { createPounceMiddleware } from '../adapters/hono.js'
+import { createPounceMiddleware, clearRouteTreeCache } from '../adapters/hono.js'
 import { api, enableSSR } from '../lib/http/client.js'
 import { fileURLToPath } from 'node:url'
 import { matchRoute, buildRouteTree } from '../lib/router/index.js'
@@ -13,6 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export interface DevServerOptions {
 	port?: number
+	hmrPort?: number
 	routesDir?: string
 	entryHtml?: string
 }
@@ -30,6 +31,7 @@ export interface DevServerOptions {
 export async function runDevServer(options: DevServerOptions = {}) {
 	enableSSR()
 	const port = options.port ?? 3000
+	const hmrPort = options.hmrPort ?? (port + 20000)
 	const routesDir = options.routesDir ?? './routes'
 	const entryHtml = options.entryHtml ?? './index.html'
 
@@ -39,6 +41,9 @@ export async function runDevServer(options: DevServerOptions = {}) {
 	const vite = await createViteServer({
 		server: { 
 			middlewareMode: true,
+			hmr: {
+				port: hmrPort
+			},
 			fs: {
 				allow: [
 					path.resolve('.'),
@@ -70,6 +75,15 @@ export async function runDevServer(options: DevServerOptions = {}) {
 		routesDir,
 		importFn: (p) => vite.ssrLoadModule(p)
 	}))
+
+	// Watch for route changes and clear cache
+	vite.watcher.on('all', (event, filePath) => {
+		const absoluteRoutesDir = path.resolve(routesDir)
+		if (filePath.startsWith(absoluteRoutesDir)) {
+			console.log(`[pounce dev] Route change detected (${event}), refreshing route tree...`)
+			clearRouteTreeCache()
+		}
+	})
 
 	// 3. Fallback HTML handler (standard SSR flow)
 	app.get('*', async (c) => {
@@ -176,6 +190,18 @@ export async function runDevServer(options: DevServerOptions = {}) {
 	console.log(`\n  🚀 Pounce-Board dev server starting...`)
 	
 	server.listen(port, () => {
-		console.log(`  http://localhost:${port}\n`)
+		console.log(`  http://localhost:${port} (HMR: ${hmrPort})\n`)
 	})
+
+	// Handle graceful shutdown
+	const shutdown = async () => {
+		console.log('\n  🛑 Pounce-Board dev server shutting down...')
+		await vite.close()
+		server.close(() => {
+			process.exit(0)
+		})
+	}
+
+	process.on('SIGINT', shutdown)
+	process.on('SIGTERM', shutdown)
 }

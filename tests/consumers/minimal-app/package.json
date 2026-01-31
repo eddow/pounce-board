@@ -5,8 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "tsx ../../../src/cli/index.ts dev",
-		"build": "vite build",
-		"preview": "vite preview"
+		"build": "tsx ../../../src/cli/index.ts build",
+		"preview": "tsx ../../../src/cli/index.ts preview"
 	},
 	"dependencies": {
 		"@hono/node-server": "latest",
@@ -20,6 +20,7 @@
 		"@babel/plugin-proposal-decorators": "^7.28.6",
 		"@babel/plugin-transform-react-jsx": "^7.28.6",
 		"@babel/plugin-transform-typescript": "^7.28.6",
+		"jsdom": "^27.4.0",
 		"tsx": "latest",
 		"vite": "latest"
 	}

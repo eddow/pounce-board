@@ -33,8 +33,26 @@
 			"pounce-ts": [
 				"../pounce-ts/src/lib/index.ts"
 			],
+			"pounce-ts/*": [
+				"../pounce-ts/src/*"
+			],
+			"pounce-ui": [
+				"../pounce-ui/src/index.ts"
+			],
+			"pounce-ui/*": [
+				"../pounce-ui/src/*"
+			],
 			"mutts": [
 				"../mutts/src/index.ts"
+			],
+			"mutts/*": [
+				"../mutts/src/*"
+			],
+			"npc-script": [
+				"../npcs/src/index.ts"
+			],
+			"omni18n": [
+				"../omni18n/src/client.ts"
 			]
 		}
 	},

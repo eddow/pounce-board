@@ -4,6 +4,7 @@ import { getContext, type RequestScope, runWithContext, createScope } from '../h
 export type SSRDataMap = Record<string, { id: string; data: unknown }>
 
 let globalClientCounter = 0
+const clientHydrationCache = new Map<string, unknown>()
 
 /**
  * Run a function within an SSR context (Legacy wrapper)
@@ -76,6 +77,7 @@ export function clearSSRData(): void {
 		ctx.ssr.counter = 0
 	} else if (typeof window !== 'undefined') {
         globalClientCounter = 0
+		clientHydrationCache.clear()
     }
 }
 
@@ -115,9 +117,16 @@ export function getSSRData<T>(id: string): T | undefined {
 		return ctx.ssr.responses.get(id) as T | undefined
 	}
 
-	// 2. Client-side or Test check (DOM)
+		// 2. Client-side or Test check (DOM + Cache)
 	// If a document is present but no context, we are either on the client or in a unit test.
 	if (typeof document !== 'undefined') {
+		// Check cache first
+		if (clientHydrationCache.has(id)) {
+			const cached = clientHydrationCache.get(id) as T
+			clientHydrationCache.delete(id) // One-time consumption
+			return cached
+		}
+
 		const script = document.getElementById(id)
 		if (!script) {
 			if (process.env.NODE_ENV === 'development') {
@@ -135,7 +144,7 @@ export function getSSRData<T>(id: string): T | undefined {
 
 		try {
 			const data = JSON.parse(script.textContent) as T
-			// One-time consumption
+			// One-time consumption from DOM
 			script.remove()
 			return data
 		} catch (err) {

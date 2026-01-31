@@ -56,7 +56,9 @@ describe('buildRouteTree', () => {
 
 		// Call the handler
 		const mockRequest = new Request('http://localhost/')
-		const result = await match!.handler({ request: mockRequest, params: {} })
+		const handler = match!.handler
+		if (!handler) throw new Error('Handler not found')
+		const result = await handler({ request: mockRequest, params: {} })
 
 		expect(result.status).toBe(200)
 		expect(result.data).toBeDefined()
@@ -71,12 +73,27 @@ describe('buildRouteTree', () => {
 		expect(match).not.toBeNull()
 
 		const mockRequest = new Request('http://localhost/users/42')
-		const result = await match!.handler({ request: mockRequest, params: match!.params })
+		const handler = match!.handler
+		if (!handler) throw new Error('Handler not found')
+		const result = await handler({ request: mockRequest, params: match!.params })
 
 		expect(result.status).toBe(200)
 		expect(result.data).toBeDefined()
 		const data = result.data as { id: string; name: string }
 		expect(data.id).toBe('42')
 		expect(data.name).toBe('User 42')
+	})
+
+	it('should record .d.ts file paths', async () => {
+		const tree = await buildRouteTree(MINIMAL_APP_ROUTES)
+		const usersNode = tree.children.get('users')!
+		const idNode = usersNode.children.get('[id]')!
+
+		// types.d.ts exists in users/[id]/, should be recorded in idNode.types
+		expect(idNode.types).toBeDefined()
+		expect(idNode.types).toContain('types.d.ts')
+		
+		// It should NOT be a route child
+		expect(idNode.children.has('types')).toBe(false)
 	})
 })

@@ -1,30 +1,27 @@
 import { reactive } from 'mutts'
 import { api } from 'pounce-board'
+import { userRoute } from './def'
 
 export default function UserDetail({ params }: { params: { id: string } }) {
+
+
+	const req = api(userRoute, { id: params.id }).get<{
+		id: string
+		name: string
+		role: string
+		contextUser: { id: string; role: string }
+		requestTimestamp: number
+	}>()
+
 	const state = reactive({
-		user: undefined as
-			| {
-				id: string
-				name: string
-				role: string
-				contextUser: { id: string; role: string }
-				requestTimestamp: number
-			}
-			| undefined,
+		user: req.hydrated,
 	})
 
-	api(`/users/${params.id}`)
-		.get<{
-			id: string
-			name: string
-			role: string
-			contextUser: { id: string; role: string }
-			requestTimestamp: number
-		}>()
-		.then((data) => {
+	if (!state.user) {
+		req.then((data) => {
 			state.user = data
 		})
+	}
 
 	return (
 		<div id="user-profile">

@@ -462,7 +462,7 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 - [x] Make sure interceptors are usable on BE (for SSR but also for proxies, functionality forwarding, ...)
 
 ### 3.5 SSR modules
-- [ ] Analyse integration with pure-glyf: bundle the CSS directly as include it in generated html
+- [x] Analyse integration with pure-glyf: bundle the CSS directly as include it in generated html
 - [ ] Use previous analyse to allow custom data bundlers
 ---
 
@@ -531,7 +531,7 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 - [x] Scan `routes/` directory structure
 - [x] Parse dynamic segments (`[id]`, `[...slug]`)
 - [x] Build route tree from filesystem
-- [ ] Support `import.meta.glob` for Vite
+- [x] Support `import.meta.glob` for Vite
 - [x] Support Node.js file scanning fallback
 
 ### 6.2 Route Matching
@@ -590,17 +590,27 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 - [x] Add port configuration
 
 ### 8.2 Build Command (`cli/build.ts`)
-- [ ] Implement `pounce build` command
-- [ ] Bundle client-side code
-- [ ] Compile server-side code
-- [ ] Generate route manifest
-- [ ] Optimize for production
+- [x] Implement `pounce build` command
+- [x] Bundle client-side code
+- [x] Compile server-side code
+- [x] Generate route manifest
+- [x] Optimize for production
 
 ### 8.3 Preview Command (`cli/preview.ts`)
-- [ ] Implement `pounce preview` command
-- [ ] Serve production build locally
-- [ ] Simulate production environment
+- [x] Implement `pounce preview` command
+- [x] Serve production build locally
+- [x] Simulate production environment
 - [x] Support bundled deployment for consumers
+
+### 8.4 Hot Module Replacement (HMR) Flow
+- The dev server (`cli/dev.ts`) initiates a Vite watcher on the project root.
+- When a file in `routes/` changes:
+    1. The watcher event triggers `clearRouteTreeCache()`.
+    2. The **next request** hitting `hono.ts` middleware finds an empty cache.
+    3. `buildRouteTree()` runs again, rescanning the directory.
+    4. `importFn` calls `vite.ssrLoadModule(path)`.
+    5. Vite sees the file modified and returns the fresh module.
+- **Result:** New routes appear, and modified handlers update instantly without server restart.
 
 ### 8.5 Consumer Lifecycle
 - [ ] Support `npm run dev` for interactive development
@@ -612,13 +622,13 @@ Most of the time, you don't need `getSSRData()` directly - just use `api()` and 
 ## Phase 9: Type System
 
 ### 9.1 Route Types
-- [ ] Generate types for route parameters
+- [x] Generate types for route parameters
 - [ ] Generate types for query parameters
 - [ ] Infer handler return types
 - [ ] Share types between client and server
 
 ### 9.2 API Client Types
-- [ ] Type `api(path)` return based on path
+- [x] Type `api(path)` return based on path
 - [ ] Infer response types from handlers
 - [ ] Support generic type parameters
 - [ ] Handle error types
@@ -788,16 +798,16 @@ include: ['src/**/*.spec.ts', 'tests/integration/**/*.spec.ts'],
 #### `tests/integration/route-scanner.spec.ts`
 - [x] Test `index.ts` handlers are loaded
 - [x] Test `index.tsx` components are loaded (Backend router only tracks API handlers currently)
-- [ ] Test `types.d.ts` types are available
+- [x] Test `types.d.ts` types are available (Verified ignored by route scanner)
 - [x] Test `common.ts` middleware is attached
-- [ ] Test HMR reloads routes in development
+- [x] Test HMR reloads routes in development
 
-#### `tests/integration/ssr-flow.spec.ts`
+#### `tests/integration/ssr-flow.spec.ts` (and `client-hydration.spec.ts`)
 - [x] Test SSR renders component with data
 - [x] Test API responses are injected as script tags
-- [ ] Test client hydrates from script tags
-- [ ] Test client falls back to fetch on miss
-- [ ] Test SSR context tracks all API calls
+- [x] Test client hydrates from script tags (Verified in `client-hydration.spec.ts`)
+- [x] Test client falls back to fetch on miss (Verified in `client-hydration.spec.ts`)
+- [x] Test SSR context tracks all API calls (Verified in `ssr-flow.spec.ts`)
 
 ---
 
@@ -840,8 +850,8 @@ export default defineConfig({
 - [ ] Test 404 handling for unknown routes
 
 #### `tests/e2e/ssr-hydration.spec.ts`
-- [ ] Test page has SSR content before JS loads
-- [ ] Test hydration doesn't cause flicker
+- [x] Test page has SSR content before JS loads
+- [x] Test hydration doesn't cause flicker
 - [x] Test script tags contain expected data (Verified in `minimal-app.spec.ts`)
 - [ ] Test interactive after hydration
 - [ ] Test hydration with multiple data sources

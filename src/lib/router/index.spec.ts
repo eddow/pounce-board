@@ -3,6 +3,7 @@ import type { RequestContext } from '../http/core.js'
 import {
 	type Middleware,
 	matchRoute,
+	buildRouteTree,
 	parseSegment,
 	type RouteHandler,
 	type RouteTreeNode,
@@ -303,6 +304,41 @@ describe('router', () => {
 
 			const match = matchRoute('/nonexistent', tree)
 			expect(match).toBeNull()
+		})
+	})
+
+	describe('buildRouteTree', () => {
+		it('should build tree from globRoutes', async () => {
+			const globRoutes = {
+				'/routes/index.ts': async () => ({ get: () => {} }),
+				'/routes/users/[id]/index.ts': async () => ({ get: () => {} }),
+				'/routes/users/[id]/types.d.ts': async () => ({}), // Types file
+			}
+
+			const tree = await buildRouteTree('/routes', undefined, globRoutes)
+
+			expect(tree.handlers?.GET).toBeDefined()
+			
+			const usersNode = tree.children.get('users')
+			const idNode = usersNode?.children.get('[id]')
+			
+			expect(idNode).toBeDefined()
+			expect(idNode?.handlers?.GET).toBeDefined()
+			expect(idNode?.types).toBe('/routes/users/[id]/types.d.ts')
+		})
+
+		it('should handle named type files', async () => {
+			const globRoutes = {
+				'/routes/users.ts': async () => ({ get: () => {} }),
+				'/routes/users.d.ts': async () => ({}),
+			}
+
+			const tree = await buildRouteTree('/routes', undefined, globRoutes)
+
+			const usersNode = tree.children.get('users')
+			expect(usersNode).toBeDefined()
+			expect(usersNode?.handlers?.GET).toBeDefined()
+			expect(usersNode?.types).toBe('/routes/users.d.ts')
 		})
 	})
 })

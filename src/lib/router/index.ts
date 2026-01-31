@@ -58,6 +58,8 @@ export type RouteTreeNode = {
 	layout?: any
 	/** True if this is a route group (folder in parentheses) */
 	isRouteGroup?: boolean
+	/** Path to associated shared type definitions (.d.ts) */
+	types?: string
 }
 
 /**
@@ -246,13 +248,181 @@ export function matchRoute(
  */
 export async function buildRouteTree(
 	routesDir: string,
-	importFn: (path: string) => Promise<any> = (p) => import(/* @vite-ignore */ toFileUrl(p))
+	importFn: (path: string) => Promise<any> = (p) => import(/* @vite-ignore */ toFileUrl(p)),
+	globRoutes?: Record<string, () => Promise<any>>
 ): Promise<RouteTreeNode> {
 	const root: RouteTreeNode = {
 		segment: '',
 		isDynamic: false,
 		isCatchAll: false,
 		children: new Map(),
+	}
+
+	// If globRoutes is provided, use it instead of fs scanning
+	if (globRoutes) {
+		for (const [filePath, loader] of Object.entries(globRoutes)) {
+			// Normalize path to be relative to routesDir (virtual or real)
+			// Glob keys are usually like "/src/routes/api/index.ts" or "./routes/api/index.ts"
+			
+			// We need to extract the segments relative to the routes root
+			// Assumption: keys contain the full path. We need to find where "routes" starts.
+			// Or we assume the glob is exactly import.meta.glob('/src/routes/**')
+			
+			// Simple heuristic: remove everything up to and including "routes/"
+			// If routesDir is "./routes", we look for that.
+			
+			// Better approach: expected input is relative paths like "./index.tsx", "./users/[id].ts"
+			// OR absolute paths if simpler.
+			
+			// Let's assume the keys are relative to the project root, and we filter by routesDir
+			// Actually, let consumer handle filtering. We just need to parse the path relative to routesDir.
+			
+			// Let's assume the user passes import.meta.glob('/src/routes/**')
+			// The keys will be like "/src/routes/index.tsx"
+			
+			// For simplicity and robustness, lets just take the relative path from the key
+			// If routesDir is "src/routes", and key is "/app/src/routes/index.tsx", we want "index.tsx"
+			
+			let relativePath = filePath
+			if (filePath.includes(routesDir.replace(/^\.\//, ''))) {
+				const parts = filePath.split(routesDir.replace(/^\.\//, ''))
+				relativePath = parts[parts.length - 1] // Take the part after routesDir
+				if (relativePath.startsWith('/')) relativePath = relativePath.slice(1)
+			}
+			
+			const segments = relativePath.split('/')
+			const fileName = segments.pop()!
+			
+			// Traverse/Create nodes for directories
+			let currentNode = root
+			for (const segmentName of segments) {
+				if (segmentName === '' || segmentName === '.') continue
+				
+				const segmentInfo = parseSegment(segmentName)
+				const isGroup = segmentName.startsWith('(') && segmentName.endsWith(')')
+				
+				let child = currentNode.children.get(segmentName)
+				if (!child) {
+					child = {
+						segment: isGroup ? '' : segmentInfo.normalizedSegment,
+						isDynamic: segmentInfo.isDynamic,
+						isCatchAll: segmentInfo.isCatchAll,
+						paramName: segmentInfo.paramName,
+						children: new Map(),
+						isRouteGroup: isGroup,
+					}
+					currentNode.children.set(segmentName, child)
+				}
+				currentNode = child
+			}
+			
+			// Handle the file
+			await processFile(fileName, loader, currentNode, filePath)
+		}
+		
+		return root
+	}
+
+	async function processFile(name: string, loader: () => Promise<any>, node: RouteTreeNode, fullPath?: string) {
+		if (name === 'common.ts') {
+			try {
+				const mod = await loader()
+				if (mod.middleware) node.middleware = mod.middleware
+			} catch (e) {
+				console.error(`Failed to load middleware`, e)
+			}
+		} else if (name === 'common.tsx') {
+			try {
+				const mod = await loader()
+				if (mod.default) node.layout = mod.default
+			} catch (e) {
+				console.error(`Failed to load layout`, e)
+			}
+		} else if (name === 'index.ts') {
+			try {
+				const mod = await loader()
+				const handlers: Record<string, RouteHandler> = {}
+				const methods = ['get', 'post', 'put', 'del', 'patch', 'delete']
+				for (const method of methods) {
+					const exportName = method
+					if (typeof mod[exportName] === 'function') {
+						const upperMethod = method === 'del' || method === 'delete' ? 'DELETE' : method.toUpperCase()
+						handlers[upperMethod] = mod[exportName]
+					}
+				}
+				node.handlers = handlers
+			} catch (e) {
+				console.error(`Failed to load handlers`, e)
+			}
+		} else if (name === 'index.tsx') {
+			try {
+				const mod = await loader()
+				if (mod.default) node.component = mod.default
+			} catch (e) {
+				console.error(`Failed to load component`, e)
+			}
+		} else if (name.endsWith('.d.ts')) {
+			// Type definition file
+			if (name === 'types.d.ts' || name === 'index.d.ts') {
+				node.types = fullPath
+			} else {
+				// Named type file e.g. users.d.ts -> /users
+				const fileNameNoExt = name.slice(0, -5) // remove .d.ts
+				const segmentInfo = parseSegment(fileNameNoExt)
+				const segment = segmentInfo.normalizedSegment
+
+				let childNode = node.children.get(segment)
+				if (!childNode) {
+					childNode = {
+						segment: segment,
+						isDynamic: segmentInfo.isDynamic,
+						isCatchAll: segmentInfo.isCatchAll,
+						paramName: segmentInfo.paramName,
+						children: new Map(),
+					}
+					node.children.set(segment, childNode)
+				}
+				childNode.types = fullPath
+			}
+		} else if ((name.endsWith('.ts') && !name.endsWith('.d.ts')) || name.endsWith('.tsx')) {
+			// Named route file
+			const fileNameNoExt = path.parse(name).name
+			const segmentInfo = parseSegment(fileNameNoExt)
+			const segment = segmentInfo.normalizedSegment
+
+			let childNode = node.children.get(segment)
+			if (!childNode) {
+				childNode = {
+					segment: segment,
+					isDynamic: segmentInfo.isDynamic,
+					isCatchAll: segmentInfo.isCatchAll,
+					paramName: segmentInfo.paramName,
+					children: new Map(),
+				}
+				node.children.set(segment, childNode)
+			}
+
+			try {
+				const mod = await loader()
+				if (name.endsWith('.ts')) {
+					const handlers: Record<string, RouteHandler> = {}
+					const methods = ['get', 'post', 'put', 'del', 'patch', 'delete']
+					for (const method of methods) {
+						const exportName = method
+						if (typeof mod[exportName] === 'function') {
+							const upperMethod =
+								method === 'del' || method === 'delete' ? 'DELETE' : method.toUpperCase()
+							handlers[upperMethod] = mod[exportName]
+						}
+					}
+					childNode.handlers = handlers
+				} else if (name.endsWith('.tsx')) {
+					if (mod.default) childNode.component = mod.default
+				}
+			} catch (e) {
+				console.error(`Failed to load handlers/component`, e)
+			}
+		}
 	}
 
 	async function scan(dir: string, node: RouteTreeNode) {
@@ -274,6 +444,7 @@ export async function buildRouteTree(
 			if (entry.isFile()) {
 				if (entry.name === 'common.ts') {
 					try {
+						// For fs scanning we use the provided importFn which likely does dynamic import
 						const mod = await importFn(entryPath)
 						if (mod.middleware) {
 							node.middleware = mod.middleware
@@ -358,6 +529,27 @@ export async function buildRouteTree(
 						}
 					} catch (e) {
 						console.error(`Failed to load handlers/component from ${entryPath}`, e)
+					}
+				} else if (entry.name.endsWith('.d.ts')) {
+					if (entry.name === 'types.d.ts' || entry.name === 'index.d.ts') {
+						node.types = entryPath
+					} else {
+						const fileNameNoExt = entry.name.slice(0, -5)
+						const segmentInfo = parseSegment(fileNameNoExt)
+						const segment = segmentInfo.normalizedSegment
+
+						let childNode = node.children.get(segment)
+						if (!childNode) {
+							childNode = {
+								segment: segment,
+								isDynamic: segmentInfo.isDynamic,
+								isCatchAll: segmentInfo.isCatchAll,
+								paramName: segmentInfo.paramName,
+								children: new Map(),
+							}
+							node.children.set(segment, childNode)
+						}
+						childNode.types = entryPath
 					}
 				}
 			} else if (entry.isDirectory()) {

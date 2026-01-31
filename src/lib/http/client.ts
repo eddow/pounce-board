@@ -13,6 +13,7 @@ import {
 	type RouteHandler,
 	runMiddlewares,
 } from './core.js'
+import type { ExtractPathParams } from '../types/inference.js'
 
 import { PounceResponse } from './response.js'
 
@@ -97,12 +98,35 @@ function matchPattern(urlString: string, pattern: string | RegExp): boolean {
 	return pathname === pattern
 }
 
-export interface ApiClientInstance {
-	get: <T>(params?: Record<string, string>) => Promise<T>
+export interface ApiClientInstance<P extends string = string> {
+	get: <T>(
+		...params: keyof ExtractPathParams<P> extends never
+			? [params?: Record<string, string>]
+			: [params: ExtractPathParams<P>]
+	) => HydratedPromise<T>
 	post: <T>(body: unknown) => Promise<T>
 	put: <T>(body: unknown) => Promise<T>
-	del: <T>(params?: Record<string, string>) => Promise<T>
+	del: <T>(
+		...params: keyof ExtractPathParams<P> extends never
+			? [params?: Record<string, string>]
+			: [params: ExtractPathParams<P>]
+	) => Promise<T>
 	patch: <T>(body: unknown) => Promise<T>
+}
+
+export interface HydratedPromise<T> extends Promise<T> {
+	/**
+	 * Synchronous access to the hydrated value if available.
+	 * undefined if no SSR data was found or if pending.
+	 */
+	hydrated: T | undefined
+}
+
+// Helper to attach value to promise
+function withHydration<T>(promise: Promise<T>, value: T | undefined): HydratedPromise<T> {
+	const p = promise as HydratedPromise<T>
+	p.hydrated = value
+	return p
 }
 
 /**
@@ -287,54 +311,87 @@ async function runInterceptors(
  * Support syntaxes:
  * - api("/path", { timeout: 5000, retries: 3 }).get()
  * - api.get() // Targets current route (pendant)
+ *
+ * @note During SSR, calls to local routes are dispatched directly to handlers
+ * without network overhead. External API calls are tracked and their results
+ * injected for client-side hydration.
  */
 function apiClient(
-	input: string | URL | object,
-	options: { timeout?: number; retries?: number; retryDelay?: number } = {}
-): ApiClientInstance {
-	// If input is a proxy object (not a string/URL), return it directly
-	if (typeof input === 'object' && input !== null && !(input instanceof URL)) {
-		return input as ApiClientInstance
+	input: any,
+	paramsOrOptions: any = {},
+	maybeOptions: any = {}
+): ApiClientInstance<any> {
+	let url: URL
+	let options = paramsOrOptions
+
+	// Handle RouteDefinition overload
+	if (typeof input === 'object' && input !== null && 'buildUrl' in input) {
+		const routeDef = input as RouteDefinition
+		const params = paramsOrOptions
+		options = maybeOptions
+		const builtUrl = routeDef.buildUrl(params)
+		
+		// Normalize to URL object
+		const ctx = getContext()
+		const origin = (typeof window !== 'undefined' && window.location) 
+			? window.location.origin 
+			: (ctx?.origin || 'http://localhost')
+		
+		if (builtUrl.startsWith('http')) {
+			url = new URL(builtUrl)
+		} else {
+			url = new URL(builtUrl, origin)
+		}
+	} else {
+		// Existing logic for string/URL/Proxy
+		if (typeof input === 'object' && input !== null && !(input instanceof URL)) {
+			return input as ApiClientInstance
+		}
+
+		const ctx = getContext()
+		const currentConfig = ctx ? { ...config, ...ctx.config } : config
+		options = paramsOrOptions // Restore options from 2nd arg if not overloaded
+		// ... but wait, in original signature, 2nd arg IS options
+		// so if input IS NOT RouteDefinition, paramsOrOptions IS options.
 	}
 
 	const ctx = getContext()
 	const currentConfig = ctx ? { ...config, ...ctx.config } : config
-
+	
 	const timeout = options.timeout ?? currentConfig.timeout
 	const maxRetries = options.retries ?? currentConfig.retries
 	const retryDelay = options.retryDelay ?? currentConfig.retryDelay
 
-	// Normalize input to URL
-	let url: URL
-
-	if (typeof input === 'string') {
-		if (input.startsWith('http://') || input.startsWith('https://')) {
-			// Absolute URL
-			url = new URL(input)
-		} else if (input.startsWith('/')) {
-			// Site-absolute
-			const ctx = getContext()
-			const origin = (typeof window !== 'undefined' && window.location) 
-				? window.location.origin 
-				: (ctx?.origin || 'http://localhost')
-			url = new URL(input, origin)
-		} else if (input.startsWith('.')) {
-			// Site-relative
-			const ctx = getContext()
-			const base = (typeof window !== 'undefined' && window.location) 
-				? window.location.href 
-				: (ctx?.origin || 'http://localhost')
-			url = new URL(input, base)
+	if (!url!) { // If not set by RouteDefinition logic
+		if (typeof input === 'string') {
+			if (input.startsWith('http://') || input.startsWith('https://')) {
+				// Absolute URL
+				url = new URL(input)
+			} else if (input.startsWith('/')) {
+				// Site-absolute
+				const ctx = getContext()
+				const origin = (typeof window !== 'undefined' && window.location) 
+					? window.location.origin 
+					: (ctx?.origin || 'http://localhost')
+				url = new URL(input, origin)
+			} else if (input.startsWith('.')) {
+				// Site-relative
+				const ctx = getContext()
+				const base = (typeof window !== 'undefined' && window.location) 
+					? window.location.href 
+					: (ctx?.origin || 'http://localhost')
+				url = new URL(input, base)
+			} else {
+				// Assume site-absolute if no scheme
+				const ctx = getContext()
+				const origin = (typeof window !== 'undefined' && window.location) 
+					? window.location.origin 
+					: (ctx?.origin || 'http://localhost')
+				url = new URL(`/${input}`, origin)
+			}
 		} else {
-			// Assume site-absolute if no scheme
-			const ctx = getContext()
-			const origin = (typeof window !== 'undefined' && window.location) 
-				? window.location.origin 
-				: (ctx?.origin || 'http://localhost')
-			url = new URL(`/${input}`, origin)
+			url = input
 		}
-	} else {
-		url = input
 	}
 
 	const ssrId = getSSRId(url)
@@ -422,8 +479,12 @@ function apiClient(
 						
 						const activeCtx = getContext()
 						const isSSR = activeCtx ? activeCtx.config.ssr ?? config.ssr : config.ssr
+						
+						// Only dispatch locally if we are in SSR AND the request targets our own origin
+						const origin = activeCtx?.origin || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost')
+						const isLocalRequest = isSSR && new URL(req.url).origin === origin
 
-						if (isSSR) {
+						if (isLocalRequest) {
 							response = await dispatchWithTimeout(req)
 						} else {
 							response = await fetchWithTimeout(new URL(req.url), {
@@ -485,7 +546,10 @@ function apiClient(
 	}
 
 	return {
-		async get<T>(params?: Record<string, string>): Promise<T> {
+		get<T>(
+			...args: [params?: any]
+		): HydratedPromise<T> {
+			const params = args[0] as Record<string, string> | undefined
 			const currentUrl = new URL(url)
 			if (params) {
 				for (const [key, value] of Object.entries(params)) {
@@ -497,14 +561,19 @@ function apiClient(
 
 			const activeCtx = getContext()
 			const isSSR = activeCtx ? activeCtx.config.ssr ?? config.ssr : config.ssr
+			let cachedData: T | undefined
 
 			// 1. Check for hydration data first (client only)
 			if (!isSSR) {
-				const cachedData = getSSRData<T>(currentSsrId)
-				if (cachedData !== undefined) return cachedData
+				cachedData = getSSRData<T>(currentSsrId)
 			}
+			
+			const promise = (async () => {
+				if (cachedData !== undefined) return cachedData
+				return requestWithRetry<T>('GET', currentUrl)
+			})()
 
-			return requestWithRetry<T>('GET', currentUrl)
+			return withHydration(promise, cachedData)
 		},
 
 		async post<T>(body: unknown): Promise<T> {
@@ -515,7 +584,10 @@ function apiClient(
 			return requestWithRetry<T>('PUT', url, body)
 		},
 
-		async del<T>(params?: Record<string, string>): Promise<T> {
+		async del<T>(
+			...args: [params?: any]
+		): Promise<T> {
+			const params = args[0] as Record<string, string> | undefined
 			const currentUrl = new URL(url)
 			if (params) {
 				for (const [key, value] of Object.entries(params)) {
@@ -537,6 +609,12 @@ function apiClient(
  * api.get() -> api(window.location.href).get() [Client] targeting current resource ("pendant")
  * api.post(body) -> api(window.location.href).post(body)
  */
+/**
+ * Universal API client as a functional proxy
+ *
+ * api.get() -> api(window.location.href).get() [Client] targeting current resource ("pendant")
+ * api.post(body) -> api(window.location.href).post(body)
+ */
 export const api = new Proxy(apiClient, {
 	get(target, prop: string) {
 		if (prop in target) {
@@ -552,7 +630,24 @@ export const api = new Proxy(apiClient, {
 
 		return (target as any)[prop]
 	},
-}) as typeof apiClient & ApiClientInstance
+}) as unknown as ApiClient & ApiClientInstance
+
+import type { RouteDefinition } from '../router/defs.js'
+import { z } from 'zod'
+
+
+export interface ApiClient {
+	<P extends string>(
+		input: P | URL | object,
+		options?: { timeout?: number; retries?: number; retryDelay?: number }
+	): ApiClientInstance<P>
+
+	<P extends string, Q extends z.ZodType>(
+		routeDef: RouteDefinition<P, Q>,
+		params: any,
+		options?: { timeout?: number; retries?: number; retryDelay?: number }
+	): ApiClientInstance<string>
+}
 
 /**
  * Direct method exports for current route ("server pendant")

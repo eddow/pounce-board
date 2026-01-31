@@ -10,9 +10,10 @@ Pounce injects API responses as script tags during SSR:
 ```
 
 ### Injection Process
-1. During SSR, track all API calls made
-2. Before sending HTML, inject responses as script tags
-3. Client hydrates from these script tags
+1. During SSR, the `api()` client automatically tracks all pending requests.
+2. The framework waits for these promises to settle before finalizing the response.
+3. Collected data is injected into HTML responses as `<script type="application/json">` tags.
+4. Client hydrates from these script tags without duplicate network requests.
 
 ### Example Implementation
 ```ts
